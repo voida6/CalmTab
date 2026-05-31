@@ -4,8 +4,13 @@
     <meta charset="UTF-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
     <title>New Tab</title>
+    <!-- External (MV3 forbids inline) and in <head> so it runs before first
+         paint, applying cached colors/wallpaper to <html> with zero flash. -->
+    <script src="/boot.js"></script>
   </head>
   <body>
+    <div id="bg-image" class="bg-image"></div>
+    <div id="bg-dim" class="bg-dim"></div>
     <div id="root"></div>
     <script type="module" src="/src/main.tsx"></script>
   </body>

@@ -112,6 +112,18 @@ export function SettingsPanel({ settings, setSettings, links, setLinks, wallpape
           </div>
         </div>
 
+        <div className="field">
+          <label>Fade-in speed — {settings.background.fade === 0 ? 'instant' : settings.background.fade + 'ms'}</label>
+          <input
+            type="range"
+            min={0}
+            max={1500}
+            step={50}
+            value={settings.background.fade}
+            onChange={(e) => patchBg({ fade: Number(e.target.value) })}
+          />
+        </div>
+
         {hasWallpaper && (
           <>
             <div className="field">

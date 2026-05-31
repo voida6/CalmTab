@@ -26,6 +26,7 @@ export interface BackgroundSettings {
   blur: number // px, 0-30
   dim: number // % darkening overlay, 0-80
   glass: boolean // frosted-glass cards
+  fade: number // content fade-in duration, ms (0 = instant)
 }
 
 export interface Settings {
@@ -47,7 +48,7 @@ export const DEFAULT_SETTINGS: Settings = {
   city: 'Melbourne',
   tagline: 'LOCK IN',
   show: { weather: true, search: true, quote: true, dock: true },
-  background: { blur: 3, dim: 35, glass: true },
+  background: { blur: 3, dim: 35, glass: true, fade: 300 },
 }
 
 // Wallpaper + its extracted palette live in their own storage key (the data URL

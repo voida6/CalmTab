@@ -10,8 +10,15 @@ body,
   height: 100%;
 }
 
-body {
+/* Base background lives on <html> (not body) so the boot script can paint it
+   before first paint. body stays transparent and lets it show through. */
+html {
   background: var(--bg);
+  transition: background-color 0.3s ease;
+}
+
+body {
+  background: transparent;
   color: var(--on-surface);
   font-family: 'Nunito', 'Segoe UI', system-ui, -apple-system, sans-serif;
   font-weight: 400;
@@ -39,24 +46,58 @@ select {
   height: 100vh;
   width: 100vw;
   overflow: hidden;
+  /* Fade the UI in over the (already-correct) background. The .ready class is
+     added on the second animation frame after mount, so the transition runs on
+     the compositor instead of competing with React's first render. */
+  opacity: 0;
+  transform: translateY(8px);
+  transition: opacity var(--fade, 300ms) ease-out, transform var(--fade, 300ms) ease-out;
+  will-change: opacity, transform;
+}
+
+.app.ready {
+  opacity: 1;
+  transform: none;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .app {
+    opacity: 1;
+    transform: none;
+    transition: none;
+  }
+  .bg-image,
+  .bg-dim {
+    transition: none;
+  }
 }
 
 /* ---------- Background layers ---------- */
 /* Slight oversize + scale so blur doesn't reveal transparent edges. */
+/* Background is driven entirely by CSS variables (set by boot.js before first
+   paint, then kept in sync by React). This makes the first frame show the fully
+   blurred wallpaper with no JS dependency. */
 .bg-image {
   position: fixed;
   inset: -60px;
+  background-image: var(--wp-image, none);
   background-size: cover;
   background-position: center;
+  filter: blur(var(--wp-blur, 0px));
   transform: scale(1.06);
+  opacity: var(--wp-on, 0);
   z-index: -2;
+  transition: opacity 0.3s ease, filter 0.25s ease;
 }
 
 .bg-dim {
   position: fixed;
   inset: 0;
+  background-color: #000;
+  opacity: calc(var(--wp-on, 0) * var(--wp-dim, 0));
   z-index: -1;
   pointer-events: none;
+  transition: opacity 0.3s ease;
 }
 
 /* ---------- Frosted glass (when a wallpaper is set) ---------- */
@@ -304,24 +345,55 @@ select {
 }
 
 .dock a {
-  width: 46px;
-  height: 46px;
-  border-radius: 14px;
+  position: relative;
+  width: 50px;
+  height: 50px;
+  border-radius: 16px;
   display: grid;
   place-items: center;
   background: var(--surface-container);
-  transition: transform 0.12s ease, background 0.12s ease;
+  color: var(--on-surface-variant);
+  transition: transform 0.2s cubic-bezier(0.2, 0.7, 0.2, 1), background 0.18s ease, color 0.18s ease;
 }
 
 .dock a:hover {
-  transform: translateY(-4px);
-  background: var(--surface-container-high);
+  transform: translateY(-6px);
+  background: var(--primary);
+  color: var(--surface);
 }
 
-.dock img {
-  width: 26px;
-  height: 26px;
-  border-radius: 6px;
+.dock svg {
+  width: 24px;
+  height: 24px;
+}
+
+.dock .monogram {
+  font-weight: 700;
+  font-size: 20px;
+}
+
+/* hover label */
+.dock a::after {
+  content: attr(data-label);
+  position: absolute;
+  bottom: 120%;
+  left: 50%;
+  transform: translateX(-50%) translateY(6px);
+  background: var(--surface-container-high);
+  color: var(--on-surface);
+  padding: 4px 10px;
+  border-radius: var(--radius-pill);
+  font-size: 12px;
+  white-space: nowrap;
+  opacity: 0;
+  pointer-events: none;
+  box-shadow: var(--shadow-card);
+  transition: opacity 0.18s ease, transform 0.18s ease;
+}
+
+.dock a:hover::after {
+  opacity: 1;
+  transform: translateX(-50%) translateY(0);
 }
 
 /* ---------- Corner buttons ---------- */
@@ -334,12 +406,60 @@ select {
   place-items: center;
   background: var(--surface-container);
   color: var(--on-surface-variant);
-  transition: background 0.12s ease, color 0.12s ease;
+  transition: transform 0.2s cubic-bezier(0.2, 0.7, 0.2, 1), background 0.16s ease, color 0.16s ease;
 }
 
 .corner-btn:hover {
   background: var(--surface-container-high);
   color: var(--primary);
+  transform: scale(1.1);
+}
+
+.corner-btn:active {
+  transform: scale(0.96);
+}
+
+.corner-btn svg {
+  transition: transform 0.25s ease;
+}
+
+.corner-btn.bottom-right:hover svg {
+  transform: rotate(45deg);
+}
+
+.corner-btn.bottom-left:hover svg {
+  transform: scale(1.18);
+}
+
+/* hover label */
+.corner-btn::after {
+  content: attr(data-label);
+  position: absolute;
+  left: 50%;
+  transform: translateX(-50%);
+  background: var(--surface-container-high);
+  color: var(--on-surface);
+  padding: 4px 10px;
+  border-radius: var(--radius-pill);
+  font-size: 12px;
+  white-space: nowrap;
+  opacity: 0;
+  pointer-events: none;
+  box-shadow: var(--shadow-card);
+  transition: opacity 0.18s ease;
+}
+
+.corner-btn.top-left::after {
+  top: 124%;
+}
+
+.corner-btn.bottom-left::after,
+.corner-btn.bottom-right::after {
+  bottom: 124%;
+}
+
+.corner-btn:hover::after {
+  opacity: 1;
 }
 
 .top-left {

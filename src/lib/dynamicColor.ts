@@ -1,12 +1,10 @@
 // Generate a Material 3 palette from an image and map it onto our CSS variables.
 // Uses Google's material-color-utilities: it picks a seed color from the image,
 // then builds tonal palettes we sample at specific tones for a dark UI.
-import {
-  sourceColorFromImage,
-  themeFromSourceColor,
-  hexFromArgb,
-  type TonalPalette,
-} from '@material/material-color-utilities'
+// Type-only import (erased at build) — the actual library is dynamically
+// imported inside paletteFromImage so it becomes a separate chunk that loads
+// ONLY when extracting a palette from a new wallpaper, not on every new tab.
+import type { TonalPalette } from '@material/material-color-utilities'
 
 // The exact set of tokens defined in theme/material.css. Keep in sync.
 export type Palette = {
@@ -46,6 +44,9 @@ function loadImage(src: string): Promise<HTMLImageElement> {
 }
 
 export async function paletteFromImage(dataUrl: string): Promise<Palette> {
+  const { sourceColorFromImage, themeFromSourceColor, hexFromArgb } = await import(
+    '@material/material-color-utilities'
+  )
   const img = await loadImage(dataUrl)
   const source = await sourceColorFromImage(img)
   const { palettes } = themeFromSourceColor(source)

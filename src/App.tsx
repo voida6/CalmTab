@@ -30,6 +30,15 @@ export default function App() {
   const [links, setLinks] = useStoredState<LinkItem[]>('links', DEFAULT_LINKS)
   const [wallpaper, setWallpaper] = useStoredState<WallpaperState>('wallpaper', DEFAULT_WALLPAPER)
   const [panel, setPanel] = useState<'none' | 'todo' | 'settings'>('none')
+  const [ready, setReady] = useState(false)
+
+  // Trigger the fade-in on the second frame after mount, once the first render
+  // has painted at opacity 0 — this makes the transition smooth instead of
+  // stuttering against React's initial render and the background repaint.
+  useEffect(() => {
+    const id = requestAnimationFrame(() => requestAnimationFrame(() => setReady(true)))
+    return () => cancelAnimationFrame(id)
+  }, [])
 
   // Merge with defaults so settings saved before new fields existed don't crash.
   const settings = useMemo<Settings>(
@@ -74,21 +83,54 @@ export default function App() {
     }
   }, [useAuto, wallpaper.palette, settings.theme])
 
+  // Keep the background CSS variables in sync (boot.js set them for first paint;
+  // the #bg-image / #bg-dim elements render from them). Background appears
+  // instantly and correctly blurred — no fade gating needed here.
+  useEffect(() => {
+    const s = document.documentElement.style
+    s.setProperty('--fade', `${settings.background.fade}ms`)
+    if (hasWallpaper) {
+      s.setProperty('--wp-image', `url(${wallpaper.dataUrl})`)
+      s.setProperty('--wp-blur', `${settings.background.blur}px`)
+      s.setProperty('--wp-dim', String(settings.background.dim / 100))
+      s.setProperty('--wp-on', '1')
+    } else {
+      s.setProperty('--wp-on', '0')
+      s.removeProperty('--wp-image')
+    }
+  }, [hasWallpaper, wallpaper.dataUrl, settings.background.blur, settings.background.dim, settings.background.fade])
+
+  // Cache a synchronous snapshot for the boot script to apply on the next load.
+  useEffect(() => {
+    const boot = {
+      useAuto,
+      theme: settings.theme,
+      vars: useAuto ? wallpaper.palette : null,
+      dataUrl: wallpaper.dataUrl,
+      blur: settings.background.blur,
+      dim: settings.background.dim,
+      fade: settings.background.fade,
+    }
+    try {
+      localStorage.setItem('calmtab-boot', JSON.stringify(boot))
+    } catch {
+      /* localStorage may be full with a large wallpaper; non-fatal */
+    }
+  }, [
+    useAuto,
+    settings.theme,
+    wallpaper.palette,
+    wallpaper.dataUrl,
+    settings.background.blur,
+    settings.background.dim,
+    settings.background.fade,
+  ])
+
   const openTodos = todos.filter((t) => !t.done).length
   const glass = settings.background.glass && hasWallpaper
 
   return (
-    <div className={`app ${glass ? 'glass' : ''}`}>
-      {hasWallpaper && (
-        <>
-          <div
-            className="bg-image"
-            style={{ backgroundImage: `url(${wallpaper.dataUrl})`, filter: `blur(${settings.background.blur}px)` }}
-          />
-          <div className="bg-dim" style={{ background: `rgba(0,0,0,${settings.background.dim / 100})` }} />
-        </>
-      )}
-
+    <div className={`app ${glass ? 'glass' : ''} ${ready ? 'ready' : ''}`}>
       <div className="hero">
         <Clock />
         <Greeting name={settings.name} tagline={settings.tagline} />
@@ -105,7 +147,7 @@ export default function App() {
       <button
         className="corner-btn top-left"
         onClick={() => setPanel('todo')}
-        title={openTodos ? `${openTodos} open task(s)` : 'Tasks'}
+        data-label={openTodos ? `${openTodos} open task${openTodos > 1 ? 's' : ''}` : 'Tasks'}
         aria-label="Tasks"
       >
         <ListIcon />
@@ -113,7 +155,7 @@ export default function App() {
 
       <button
         className="corner-btn bottom-left"
-        title="AI assistant (coming soon)"
+        data-label="AI assistant — soon"
         aria-label="AI assistant"
         onClick={() => alert('AI assistant is coming in a later update ✨')}
       >
@@ -123,7 +165,7 @@ export default function App() {
       <button
         className="corner-btn bottom-right"
         onClick={() => setPanel('settings')}
-        title="Settings"
+        data-label="Settings"
         aria-label="Settings"
       >
         <GearIcon />
