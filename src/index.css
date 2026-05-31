@@ -13,7 +13,8 @@ body,
 body {
   background: var(--bg);
   color: var(--on-surface);
-  font-family: 'Segoe UI', system-ui, -apple-system, sans-serif;
+  font-family: 'Nunito', 'Segoe UI', system-ui, -apple-system, sans-serif;
+  font-weight: 400;
   -webkit-font-smoothing: antialiased;
   overflow: hidden;
 }
@@ -40,6 +41,44 @@ select {
   overflow: hidden;
 }
 
+/* ---------- Background layers ---------- */
+/* Slight oversize + scale so blur doesn't reveal transparent edges. */
+.bg-image {
+  position: fixed;
+  inset: -60px;
+  background-size: cover;
+  background-position: center;
+  transform: scale(1.06);
+  z-index: -2;
+}
+
+.bg-dim {
+  position: fixed;
+  inset: 0;
+  z-index: -1;
+  pointer-events: none;
+}
+
+/* ---------- Frosted glass (when a wallpaper is set) ---------- */
+.app.glass .card,
+.app.glass .panel {
+  background: color-mix(in srgb, var(--surface-container) 50%, transparent);
+  backdrop-filter: blur(22px) saturate(150%);
+  -webkit-backdrop-filter: blur(22px) saturate(150%);
+  border: 1px solid color-mix(in srgb, var(--on-surface) 12%, transparent);
+}
+
+.app.glass .corner-btn,
+.app.glass .dock a {
+  background: color-mix(in srgb, var(--surface-container) 42%, transparent);
+  backdrop-filter: blur(14px) saturate(150%);
+  -webkit-backdrop-filter: blur(14px) saturate(150%);
+}
+
+.app.glass .chip {
+  background: color-mix(in srgb, var(--surface-container-high) 55%, transparent);
+}
+
 /* ---------- Hero (clock + greeting) ---------- */
 .hero {
   position: absolute;
@@ -51,9 +90,9 @@ select {
 
 .clock {
   font-size: clamp(72px, 11vw, 168px);
-  font-weight: 800;
+  font-weight: 600;
   line-height: 1;
-  letter-spacing: -2px;
+  letter-spacing: -1px;
   color: var(--primary-strong);
   opacity: 0.92;
   font-variant-numeric: tabular-nums;
@@ -61,8 +100,8 @@ select {
 
 .greeting {
   margin-top: 18px;
-  font-family: Georgia, 'Times New Roman', serif;
   font-size: clamp(28px, 3.4vw, 46px);
+  font-weight: 600;
   color: var(--on-surface);
   opacity: 0.9;
 }
@@ -70,6 +109,7 @@ select {
 .tagline {
   margin-top: 10px;
   font-size: 15px;
+  font-weight: 600;
   letter-spacing: 4px;
   text-transform: uppercase;
   color: var(--on-surface-variant);
@@ -103,7 +143,7 @@ select {
 
 .weather-title {
   font-size: 22px;
-  font-weight: 700;
+  font-weight: 600;
   color: var(--primary);
 }
 
@@ -112,7 +152,7 @@ select {
   align-items: center;
   gap: 10px;
   font-size: 52px;
-  font-weight: 800;
+  font-weight: 600;
   color: var(--primary);
 }
 
@@ -379,6 +419,36 @@ select {
 .field input:focus,
 .field select:focus {
   border-color: var(--primary-strong);
+}
+
+.field input[type='range'] {
+  -webkit-appearance: none;
+  appearance: none;
+  background: transparent;
+  border: none;
+  padding: 8px 0;
+  height: 22px;
+}
+
+.field input[type='range']::-webkit-slider-runnable-track {
+  height: 6px;
+  border-radius: var(--radius-pill);
+  background: var(--track);
+}
+
+.field input[type='range']::-webkit-slider-thumb {
+  -webkit-appearance: none;
+  appearance: none;
+  margin-top: -6px;
+  width: 18px;
+  height: 18px;
+  border-radius: 50%;
+  background: var(--primary-strong);
+}
+
+.btn-pill:disabled {
+  opacity: 0.5;
+  cursor: default;
 }
 
 .row {

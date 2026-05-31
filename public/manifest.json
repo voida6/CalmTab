@@ -4,7 +4,7 @@
   "version": "0.1.0",
   "description": "A calm, customizable Material You new-tab dashboard.",
   "chrome_url_overrides": { "newtab": "index.html" },
-  "permissions": ["storage", "geolocation"],
+  "permissions": ["storage", "unlimitedStorage", "geolocation"],
   "host_permissions": [
     "https://api.open-meteo.com/*",
     "https://geocoding-api.open-meteo.com/*"

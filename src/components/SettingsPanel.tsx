@@ -1,6 +1,15 @@
-import { useState } from 'react'
-import type { LinkItem, Settings, ThemeName, Units, WidgetToggles } from '../lib/types'
+import { useRef, useState } from 'react'
+import type {
+  ColorMode,
+  LinkItem,
+  Settings,
+  ThemeName,
+  Units,
+  WallpaperState,
+  WidgetToggles,
+} from '../lib/types'
 import { uid } from '../lib/types'
+import { fileToScaledDataUrl } from '../lib/image'
 import { PlusIcon, XIcon } from './Icons'
 
 interface Props {
@@ -8,6 +17,8 @@ interface Props {
   setSettings: (updater: (prev: Settings) => Settings) => void
   links: LinkItem[]
   setLinks: (updater: (prev: LinkItem[]) => LinkItem[]) => void
+  wallpaper: WallpaperState
+  setWallpaper: (updater: (prev: WallpaperState) => WallpaperState) => void
   onClose: () => void
 }
 
@@ -24,13 +35,33 @@ const WIDGETS: { key: keyof WidgetToggles; label: string }[] = [
   { key: 'dock', label: 'Quick links' },
 ]
 
-export function SettingsPanel({ settings, setSettings, links, setLinks, onClose }: Props) {
+export function SettingsPanel({ settings, setSettings, links, setLinks, wallpaper, setWallpaper, onClose }: Props) {
   const [linkName, setLinkName] = useState('')
   const [linkUrl, setLinkUrl] = useState('')
+  const [uploading, setUploading] = useState(false)
+  const fileRef = useRef<HTMLInputElement>(null)
 
   const patch = (p: Partial<Settings>) => setSettings((prev) => ({ ...prev, ...p }))
+  const patchBg = (p: Partial<Settings['background']>) =>
+    setSettings((prev) => ({ ...prev, background: { ...prev.background, ...p } }))
   const toggleWidget = (key: keyof WidgetToggles) =>
     setSettings((prev) => ({ ...prev, show: { ...prev.show, [key]: !prev.show[key] } }))
+
+  const onPickFile = async (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0]
+    if (!file) return
+    setUploading(true)
+    try {
+      const dataUrl = await fileToScaledDataUrl(file)
+      // Clear the old palette so the apply effect recomputes for the new image.
+      setWallpaper(() => ({ dataUrl, palette: null, sig: '' }))
+    } finally {
+      setUploading(false)
+      if (fileRef.current) fileRef.current.value = ''
+    }
+  }
+
+  const removeWallpaper = () => setWallpaper(() => ({ dataUrl: '', palette: null, sig: '' }))
 
   const addLink = () => {
     const name = linkName.trim()
@@ -41,6 +72,8 @@ export function SettingsPanel({ settings, setSettings, links, setLinks, onClose 
     setLinkName('')
     setLinkUrl('')
   }
+
+  const hasWallpaper = !!wallpaper.dataUrl
 
   return (
     <>
@@ -63,16 +96,79 @@ export function SettingsPanel({ settings, setSettings, links, setLinks, onClose 
           <input value={settings.tagline} onChange={(e) => patch({ tagline: e.target.value })} />
         </div>
 
+        {/* ---------- Background ---------- */}
         <div className="field">
-          <label>Theme</label>
-          <select value={settings.theme} onChange={(e) => patch({ theme: e.target.value as ThemeName })}>
-            {THEMES.map((t) => (
-              <option key={t.id} value={t.id}>
-                {t.label}
-              </option>
-            ))}
-          </select>
+          <label>Background</label>
+          <input ref={fileRef} type="file" accept="image/*" hidden onChange={onPickFile} />
+          <div className="row">
+            <button className="btn-pill" onClick={() => fileRef.current?.click()} disabled={uploading}>
+              {uploading ? 'Loading…' : hasWallpaper ? 'Replace image' : 'Upload image'}
+            </button>
+            {hasWallpaper && (
+              <button className="btn-ghost" onClick={removeWallpaper}>
+                Remove
+              </button>
+            )}
+          </div>
         </div>
+
+        {hasWallpaper && (
+          <>
+            <div className="field">
+              <label>Background blur — {settings.background.blur}px</label>
+              <input
+                type="range"
+                min={0}
+                max={30}
+                value={settings.background.blur}
+                onChange={(e) => patchBg({ blur: Number(e.target.value) })}
+              />
+            </div>
+            <div className="field">
+              <label>Dim overlay — {settings.background.dim}%</label>
+              <input
+                type="range"
+                min={0}
+                max={80}
+                value={settings.background.dim}
+                onChange={(e) => patchBg({ dim: Number(e.target.value) })}
+              />
+            </div>
+            <div className="row between" style={{ padding: '2px 0' }}>
+              <span>Frosted-glass cards</span>
+              <button
+                className={`toggle ${settings.background.glass ? 'on' : ''}`}
+                onClick={() => patchBg({ glass: !settings.background.glass })}
+                aria-label="Toggle frosted glass"
+              />
+            </div>
+          </>
+        )}
+
+        {/* ---------- Color ---------- */}
+        <div className="field">
+          <label>Color mode</label>
+          <select value={settings.colorMode} onChange={(e) => patch({ colorMode: e.target.value as ColorMode })}>
+            <option value="auto">Auto (from wallpaper)</option>
+            <option value="manual">Manual theme</option>
+          </select>
+          {settings.colorMode === 'auto' && !hasWallpaper && (
+            <span className="muted">Upload a wallpaper to generate colors. Using the manual theme until then.</span>
+          )}
+        </div>
+
+        {(settings.colorMode === 'manual' || !hasWallpaper) && (
+          <div className="field">
+            <label>Theme</label>
+            <select value={settings.theme} onChange={(e) => patch({ theme: e.target.value as ThemeName })}>
+              {THEMES.map((t) => (
+                <option key={t.id} value={t.id}>
+                  {t.label}
+                </option>
+              ))}
+            </select>
+          </div>
+        )}
 
         <div className="field">
           <label>City (for weather)</label>
