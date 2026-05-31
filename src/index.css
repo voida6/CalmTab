@@ -1,0 +1,481 @@
+* {
+  box-sizing: border-box;
+  margin: 0;
+  padding: 0;
+}
+
+html,
+body,
+#root {
+  height: 100%;
+}
+
+body {
+  background: var(--bg);
+  color: var(--on-surface);
+  font-family: 'Segoe UI', system-ui, -apple-system, sans-serif;
+  -webkit-font-smoothing: antialiased;
+  overflow: hidden;
+}
+
+button {
+  font-family: inherit;
+  cursor: pointer;
+  border: none;
+  background: none;
+  color: inherit;
+}
+
+input,
+select {
+  font-family: inherit;
+  color: inherit;
+}
+
+/* ---------- App shell ---------- */
+.app {
+  position: relative;
+  height: 100vh;
+  width: 100vw;
+  overflow: hidden;
+}
+
+/* ---------- Hero (clock + greeting) ---------- */
+.hero {
+  position: absolute;
+  top: 50%;
+  left: clamp(40px, 9vw, 170px);
+  transform: translateY(-50%);
+  user-select: none;
+}
+
+.clock {
+  font-size: clamp(72px, 11vw, 168px);
+  font-weight: 800;
+  line-height: 1;
+  letter-spacing: -2px;
+  color: var(--primary-strong);
+  opacity: 0.92;
+  font-variant-numeric: tabular-nums;
+}
+
+.greeting {
+  margin-top: 18px;
+  font-family: Georgia, 'Times New Roman', serif;
+  font-size: clamp(28px, 3.4vw, 46px);
+  color: var(--on-surface);
+  opacity: 0.9;
+}
+
+.tagline {
+  margin-top: 10px;
+  font-size: 15px;
+  letter-spacing: 4px;
+  text-transform: uppercase;
+  color: var(--on-surface-variant);
+}
+
+/* ---------- Right column of cards ---------- */
+.right-col {
+  position: absolute;
+  top: 50%;
+  right: clamp(40px, 6vw, 120px);
+  transform: translateY(-50%);
+  width: clamp(360px, 34vw, 480px);
+  display: flex;
+  flex-direction: column;
+  gap: 28px;
+}
+
+.card {
+  background: var(--surface-container);
+  border-radius: var(--radius-card);
+  box-shadow: var(--shadow-card);
+  padding: 24px 28px;
+}
+
+/* ---------- Weather ---------- */
+.weather-top {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+}
+
+.weather-title {
+  font-size: 22px;
+  font-weight: 700;
+  color: var(--primary);
+}
+
+.weather-temp {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  font-size: 52px;
+  font-weight: 800;
+  color: var(--primary);
+}
+
+.weather-temp .wx-icon {
+  font-size: 40px;
+}
+
+.weather-row {
+  display: flex;
+  align-items: center;
+  gap: 14px;
+  margin-top: 16px;
+  color: var(--on-surface-variant);
+  font-size: 15px;
+}
+
+.humidity-track {
+  flex: 1;
+  height: 8px;
+  border-radius: var(--radius-pill);
+  background: var(--track);
+  overflow: hidden;
+}
+
+.humidity-fill {
+  height: 100%;
+  border-radius: var(--radius-pill);
+  background: var(--primary-strong);
+}
+
+.weather-meta {
+  display: flex;
+  gap: 18px;
+  margin-top: 14px;
+  flex-wrap: wrap;
+}
+
+.chip {
+  background: var(--surface-container-high);
+  border-radius: var(--radius-pill);
+  padding: 6px 14px;
+  font-size: 14px;
+  color: var(--on-surface-variant);
+}
+
+/* ---------- Search ---------- */
+.search {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+}
+
+.engine-select {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  background: transparent;
+  border: none;
+}
+
+.engine-select img {
+  width: 22px;
+  height: 22px;
+}
+
+.engine-select select {
+  background: transparent;
+  border: none;
+  outline: none;
+  font-size: 14px;
+  color: var(--on-surface-variant);
+}
+
+.search-input {
+  flex: 1;
+  background: transparent;
+  border: none;
+  outline: none;
+  font-size: 16px;
+  color: var(--on-surface);
+}
+
+.search-input::placeholder {
+  color: var(--on-surface-variant);
+}
+
+.icon-inline {
+  display: grid;
+  place-items: center;
+  width: 36px;
+  height: 36px;
+  border-radius: var(--radius-pill);
+  color: var(--on-surface-variant);
+}
+
+.icon-inline:hover {
+  background: var(--surface-container-high);
+  color: var(--primary);
+}
+
+.open-btn {
+  color: var(--primary);
+  font-size: 15px;
+  padding: 6px 10px;
+  border-radius: var(--radius-pill);
+}
+
+.open-btn:hover {
+  background: var(--surface-container-high);
+}
+
+.mic-active {
+  color: var(--primary);
+  animation: pulse 1.2s ease-in-out infinite;
+}
+
+@keyframes pulse {
+  50% {
+    opacity: 0.4;
+  }
+}
+
+/* ---------- Quote ---------- */
+.quote {
+  text-align: center;
+  padding: 30px 28px;
+}
+
+.quote-text {
+  font-style: italic;
+  font-size: 22px;
+  color: var(--on-surface);
+}
+
+.quote-author {
+  margin-top: 14px;
+  color: var(--primary);
+  font-size: 15px;
+}
+
+/* ---------- Dock ---------- */
+.dock {
+  position: absolute;
+  bottom: 34px;
+  left: 50%;
+  transform: translateX(-50%);
+  display: flex;
+  gap: 22px;
+}
+
+.dock a {
+  width: 46px;
+  height: 46px;
+  border-radius: 14px;
+  display: grid;
+  place-items: center;
+  background: var(--surface-container);
+  transition: transform 0.12s ease, background 0.12s ease;
+}
+
+.dock a:hover {
+  transform: translateY(-4px);
+  background: var(--surface-container-high);
+}
+
+.dock img {
+  width: 26px;
+  height: 26px;
+  border-radius: 6px;
+}
+
+/* ---------- Corner buttons ---------- */
+.corner-btn {
+  position: absolute;
+  width: 46px;
+  height: 46px;
+  border-radius: 14px;
+  display: grid;
+  place-items: center;
+  background: var(--surface-container);
+  color: var(--on-surface-variant);
+  transition: background 0.12s ease, color 0.12s ease;
+}
+
+.corner-btn:hover {
+  background: var(--surface-container-high);
+  color: var(--primary);
+}
+
+.top-left {
+  top: 26px;
+  left: 26px;
+}
+
+.bottom-left {
+  bottom: 26px;
+  left: 26px;
+}
+
+.bottom-right {
+  bottom: 26px;
+  right: 26px;
+}
+
+/* ---------- Slide-in panels ---------- */
+.scrim {
+  position: absolute;
+  inset: 0;
+  background: rgba(0, 0, 0, 0.32);
+  z-index: 10;
+}
+
+.panel {
+  position: absolute;
+  top: 0;
+  height: 100vh;
+  width: min(380px, 90vw);
+  background: var(--surface);
+  box-shadow: var(--shadow-card);
+  z-index: 11;
+  padding: 26px;
+  overflow-y: auto;
+  display: flex;
+  flex-direction: column;
+  gap: 18px;
+}
+
+.panel.left {
+  left: 0;
+  border-radius: 0 24px 24px 0;
+}
+
+.panel.right {
+  right: 0;
+  border-radius: 24px 0 0 24px;
+}
+
+.panel h2 {
+  font-size: 20px;
+  color: var(--primary);
+}
+
+.field {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+}
+
+.field label {
+  font-size: 13px;
+  color: var(--on-surface-variant);
+}
+
+.field input,
+.field select {
+  background: var(--surface-container);
+  border: 1px solid var(--outline);
+  border-radius: 12px;
+  padding: 10px 12px;
+  font-size: 15px;
+  outline: none;
+}
+
+.field input:focus,
+.field select:focus {
+  border-color: var(--primary-strong);
+}
+
+.row {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+}
+
+.row.between {
+  justify-content: space-between;
+}
+
+.btn-pill {
+  background: var(--primary-strong);
+  color: #fff;
+  border-radius: var(--radius-pill);
+  padding: 9px 16px;
+  font-size: 14px;
+}
+
+.btn-ghost {
+  color: var(--on-surface-variant);
+  padding: 8px 12px;
+  border-radius: var(--radius-pill);
+}
+
+.btn-ghost:hover {
+  background: var(--surface-container-high);
+  color: var(--primary);
+}
+
+/* ---------- Todos ---------- */
+.todo-item {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  padding: 8px 0;
+  border-bottom: 1px solid var(--outline);
+}
+
+.todo-item.done .todo-text {
+  text-decoration: line-through;
+  opacity: 0.5;
+}
+
+.todo-text {
+  flex: 1;
+  font-size: 15px;
+}
+
+.todo-check {
+  width: 20px;
+  height: 20px;
+  border-radius: 6px;
+  border: 2px solid var(--outline);
+  display: grid;
+  place-items: center;
+  flex-shrink: 0;
+}
+
+.todo-check.on {
+  background: var(--primary-strong);
+  border-color: var(--primary-strong);
+  color: #fff;
+}
+
+.muted {
+  color: var(--on-surface-variant);
+  font-size: 14px;
+}
+
+.toggle {
+  width: 42px;
+  height: 24px;
+  border-radius: 999px;
+  background: var(--track);
+  position: relative;
+  transition: background 0.15s ease;
+  flex-shrink: 0;
+}
+
+.toggle.on {
+  background: var(--primary-strong);
+}
+
+.toggle::after {
+  content: '';
+  position: absolute;
+  top: 3px;
+  left: 3px;
+  width: 18px;
+  height: 18px;
+  border-radius: 50%;
+  background: #fff;
+  transition: transform 0.15s ease;
+}
+
+.toggle.on::after {
+  transform: translateX(18px);
+}

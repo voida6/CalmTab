@@ -1,0 +1,53 @@
+/*
+ * Material 3 tonal tokens as CSS variables. Phase 1 ships a few static dark
+ * palettes; every component reads ONLY these variables, so Phase 2 can generate
+ * a palette from the user's wallpaper (material-color-utilities) and repaint the
+ * whole UI by swapping these values. Default palette = "purple" (matches the
+ * reference screenshot, seeded from the PageNoter purple theme).
+ */
+
+:root,
+:root[data-theme='purple'] {
+  --bg: #2a2433;
+  --surface: #322b3d;
+  --surface-container: #3a3247;
+  --surface-container-high: #443c52;
+  --primary: #c8b6f0;
+  --primary-strong: #9b87c4;
+  --on-surface: #ece8f2;
+  --on-surface-variant: #b3a8c4;
+  --outline: #5a5168;
+  --track: #4a4259;
+}
+
+:root[data-theme='midnight'] {
+  --bg: #1e2433;
+  --surface: #262d3f;
+  --surface-container: #2a3142;
+  --surface-container-high: #333c52;
+  --primary: #9ec5f5;
+  --primary-strong: #5b9bd5;
+  --on-surface: #e6ebf5;
+  --on-surface-variant: #9fb0cb;
+  --outline: #3a4458;
+  --track: #3a4458;
+}
+
+:root[data-theme='teal'] {
+  --bg: #16292b;
+  --surface: #1d3537;
+  --surface-container: #234042;
+  --surface-container-high: #2c4f51;
+  --primary: #7ad6d9;
+  --primary-strong: #2bb1b8;
+  --on-surface: #e0f0f0;
+  --on-surface-variant: #97bcbd;
+  --outline: #2f5052;
+  --track: #2f5052;
+}
+
+:root {
+  --radius-card: 28px;
+  --radius-pill: 999px;
+  --shadow-card: 0 8px 28px rgba(0, 0, 0, 0.22);
+}
