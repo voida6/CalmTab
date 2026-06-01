@@ -1,8 +1,9 @@
 import { APPS } from '../data/apps'
-import { brandGlyph } from '../data/brandIcons'
+import type { IconStyle } from '../lib/types'
+import { ShortcutIcon } from './ShortcutIcon'
 import { XIcon } from './Icons'
 
-export function AppsDrawer({ onClose }: { onClose: () => void }) {
+export function AppsDrawer({ iconStyle, onClose }: { iconStyle: IconStyle; onClose: () => void }) {
   return (
     <>
       <div className="scrim transparent" onClick={onClose} />
@@ -14,23 +15,14 @@ export function AppsDrawer({ onClose }: { onClose: () => void }) {
           </button>
         </div>
         <div className="apps-grid">
-          {APPS.map((a) => {
-            const path = brandGlyph(a.url)
-            return (
-              <a key={a.name} href={a.url} className="app-tile" title={a.name}>
-                <span className="app-glyph">
-                  {path ? (
-                    <svg viewBox="0 0 24 24" aria-hidden="true">
-                      <path d={path} fill="currentColor" />
-                    </svg>
-                  ) : (
-                    <span className="monogram">{a.name[0]}</span>
-                  )}
-                </span>
-                <span className="app-name">{a.name}</span>
-              </a>
-            )
-          })}
+          {APPS.map((a) => (
+            <a key={a.name} href={a.url} className="app-tile" title={a.name}>
+              <span className="app-glyph">
+                <ShortcutIcon url={a.url} name={a.name} style={iconStyle} />
+              </span>
+              <span className="app-name">{a.name}</span>
+            </a>
+          ))}
         </div>
       </aside>
     </>

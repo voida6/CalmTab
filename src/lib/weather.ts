@@ -1,6 +1,13 @@
 // Weather via Open-Meteo (no API key). Two calls: geocode a city name to
 // coordinates, then fetch the current conditions + today's min/max.
 
+export interface DayForecast {
+  date: string // ISO date
+  code: number
+  minC: number
+  maxC: number
+}
+
 export interface Weather {
   city: string
   tempC: number
@@ -9,6 +16,7 @@ export interface Weather {
   humidity: number
   code: number
   description: string
+  forecast: DayForecast[]
   fetchedAt: number
 }
 
@@ -64,14 +72,21 @@ export async function fetchWeather(city: string): Promise<Weather | null> {
     `https://api.open-meteo.com/v1/forecast?latitude=${place.latitude}` +
     `&longitude=${place.longitude}` +
     '&current=temperature_2m,relative_humidity_2m,weather_code' +
-    '&daily=temperature_2m_max,temperature_2m_min&timezone=auto'
+    '&daily=weather_code,temperature_2m_max,temperature_2m_min&forecast_days=4&timezone=auto'
   const res = await fetch(url)
   if (!res.ok) return null
   const d = (await res.json()) as {
     current: { temperature_2m: number; relative_humidity_2m: number; weather_code: number }
-    daily: { temperature_2m_max: number[]; temperature_2m_min: number[] }
+    daily: { time: string[]; weather_code: number[]; temperature_2m_max: number[]; temperature_2m_min: number[] }
   }
   const { label } = describeCode(d.current.weather_code)
+  // Next 3 days (skip today at index 0).
+  const forecast: DayForecast[] = d.daily.time.slice(1, 4).map((date, i) => ({
+    date,
+    code: d.daily.weather_code[i + 1],
+    maxC: d.daily.temperature_2m_max[i + 1],
+    minC: d.daily.temperature_2m_min[i + 1],
+  }))
   return {
     city: place.name,
     tempC: d.current.temperature_2m,
@@ -80,6 +95,7 @@ export async function fetchWeather(city: string): Promise<Weather | null> {
     description: label,
     maxC: d.daily.temperature_2m_max[0],
     minC: d.daily.temperature_2m_min[0],
+    forecast,
     fetchedAt: Date.now(),
   }
 }

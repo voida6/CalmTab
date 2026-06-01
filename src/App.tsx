@@ -1,8 +1,15 @@
 import { useEffect, useMemo, useState } from 'react'
 import { Clock } from './components/Clock'
 import { AnalogClock } from './components/AnalogClock'
+import { WordClock } from './components/WordClock'
+import { FlipClock } from './components/FlipClock'
 import { Greeting } from './components/Greeting'
 import { WeatherCard } from './components/WeatherCard'
+import { FocusWidget } from './components/FocusWidget'
+import { TimerWidget } from './components/TimerWidget'
+import { HabitsWidget } from './components/HabitsWidget'
+import { CountdownWidget } from './components/CountdownWidget'
+import { TickerWidget } from './components/TickerWidget'
 import { SearchBar } from './components/SearchBar'
 import { QuoteCard } from './components/QuoteCard'
 import { LinksDock } from './components/LinksDock'
@@ -201,6 +208,23 @@ export default function App() {
   const glass = settings.background.glass && hasWallpaper
   const close = () => setPanel('none')
 
+  const renderClock = () => {
+    switch (settings.clockStyle) {
+      case 'analog':
+        return <AnalogClock face="flower" />
+      case 'analogClassic':
+        return <AnalogClock face="circle" />
+      case 'word':
+        return <WordClock />
+      case 'flip':
+        return <FlipClock hour12={settings.hour12} />
+      case 'minimal':
+        return <Clock hour12={settings.hour12} showSeconds={false} />
+      default:
+        return <Clock hour12={settings.hour12} showSeconds />
+    }
+  }
+
   // Light/dark quick toggle. With a wallpaper in auto mode it flips the palette
   // tones; otherwise it swaps the manual theme to its paired light/dark variant.
   const effectiveAuto = settings.colorMode === 'auto' && hasWallpaper
@@ -216,17 +240,24 @@ export default function App() {
   return (
     <div className={`app ${glass ? 'glass' : ''} ${ready ? 'ready' : ''}`}>
       <div className="hero">
-        {settings.clockStyle === 'analog' ? <AnalogClock /> : <Clock hour12={settings.hour12} />}
+        {renderClock()}
         <Greeting name={settings.name} tagline={settings.tagline} />
       </div>
 
       <div className="right-col">
-        {settings.show.weather && <WeatherCard city={settings.city} units={settings.units} />}
+        {settings.show.weather && (
+          <WeatherCard city={settings.city} units={settings.units} showForecast={settings.show.forecast} />
+        )}
+        {settings.show.focus && <FocusWidget />}
+        {settings.show.timer && <TimerWidget />}
+        {settings.show.habits && <HabitsWidget />}
+        {settings.show.countdown && <CountdownWidget countdown={settings.countdown} />}
+        {settings.show.ticker && <TickerWidget symbols={settings.tickerSymbols} />}
         {settings.show.search && <SearchBar />}
         {settings.show.quote && <QuoteCard />}
       </div>
 
-      {settings.show.dock && <LinksDock links={links} />}
+      {settings.show.dock && <LinksDock links={links} iconStyle={settings.iconStyle} />}
 
       <button
         className="corner-btn top-left"
@@ -281,9 +312,9 @@ export default function App() {
         <GearIcon />
       </button>
 
-      {panel === 'ai' && <AiToolsMenu onClose={close} />}
+      {panel === 'ai' && <AiToolsMenu iconStyle={settings.iconStyle} onClose={close} />}
       {panel === 'todo' && <TodoPanel todos={todos} setTodos={setTodos} onClose={close} />}
-      {panel === 'apps' && <AppsDrawer onClose={close} />}
+      {panel === 'apps' && <AppsDrawer iconStyle={settings.iconStyle} onClose={close} />}
       {panel === 'settings' && (
         <SettingsPanel
           settings={settings}

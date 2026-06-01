@@ -1,7 +1,8 @@
 export type ThemeName = 'purple' | 'midnight' | 'teal' | 'peach' | 'mint' | 'lavender'
 export type Units = 'metric' | 'imperial'
-export type ClockStyle = 'digital' | 'analog'
+export type ClockStyle = 'digital' | 'minimal' | 'analog' | 'analogClassic' | 'word' | 'flip'
 export type ColorScheme = 'dark' | 'light'
+export type IconStyle = 'themed' | 'favicon'
 export type CardShape = 'rounded' | 'squircle' | 'pill'
 
 // Card corner radius per shape (applied to --radius-card).
@@ -47,9 +48,34 @@ export interface TodoItem {
 
 export interface WidgetToggles {
   weather: boolean
+  forecast: boolean // 3-day strip on the weather card
+  focus: boolean
+  timer: boolean
+  habits: boolean
+  countdown: boolean
+  ticker: boolean
   search: boolean
   quote: boolean
   dock: boolean
+}
+
+export interface CountdownSettings {
+  label: string
+  date: string // YYYY-MM-DD
+}
+
+export interface FocusState {
+  date: string // YYYY-MM-DD the focus belongs to
+  text: string
+  done: boolean
+}
+
+export const DEFAULT_FOCUS: FocusState = { date: '', text: '', done: false }
+
+export interface HabitItem {
+  id: string
+  name: string
+  history: string[] // YYYY-MM-DD dates completed
 }
 
 export type ColorMode = 'auto' | 'manual'
@@ -73,10 +99,13 @@ export interface Settings {
   accentColor: string // hex seed used when accentMode === 'custom'
   clockStyle: ClockStyle
   hour12: boolean
+  iconStyle: IconStyle // shortcut icons: themed glyphs or full-color favicons
   cardShape: CardShape
   units: Units
   city: string
   tagline: string
+  countdown: CountdownSettings
+  tickerSymbols: string[] // CoinGecko coin ids (e.g. bitcoin, ethereum)
   show: WidgetToggles
   background: BackgroundSettings
 }
@@ -90,11 +119,25 @@ export const DEFAULT_SETTINGS: Settings = {
   accentColor: '#7c6bdc',
   clockStyle: 'digital',
   hour12: false,
+  iconStyle: 'themed',
   cardShape: 'squircle',
   units: 'metric',
   city: 'Melbourne',
   tagline: 'LOCK IN',
-  show: { weather: true, search: true, quote: true, dock: true },
+  countdown: { label: 'Countdown', date: '' },
+  tickerSymbols: ['bitcoin', 'ethereum'],
+  show: {
+    weather: true,
+    forecast: false,
+    focus: true,
+    timer: false,
+    habits: false,
+    countdown: false,
+    ticker: false,
+    search: false,
+    quote: false,
+    dock: true,
+  },
   background: { blur: 3, dim: 35, glass: true, cardOpacity: 70, fade: 300 },
 }
 

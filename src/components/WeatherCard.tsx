@@ -9,9 +9,12 @@ const CACHE_KEY = 'weatherCache'
 interface Props {
   city: string
   units: Units
+  showForecast: boolean
 }
 
-export function WeatherCard({ city, units }: Props) {
+const WEEKDAY = ['Sun', 'Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat']
+
+export function WeatherCard({ city, units, showForecast }: Props) {
   const [wx, setWx] = useState<Weather | null>(null)
   const [error, setError] = useState(false)
 
@@ -79,6 +82,21 @@ export function WeatherCard({ city, units }: Props) {
         </span>
         <span className="chip">{wx.city}</span>
       </div>
+      {showForecast && wx.forecast && wx.forecast.length > 0 && (
+        <div className="forecast-strip">
+          {wx.forecast.map((day) => (
+            <div className="forecast-day" key={day.date}>
+              <span className="forecast-dow">{WEEKDAY[new Date(day.date).getDay()]}</span>
+              <span className="forecast-ico">
+                <WeatherIcon code={day.code} size={26} />
+              </span>
+              <span className="forecast-temps">
+                {toDisplayTemp(day.maxC, units)}° <span className="muted">{toDisplayTemp(day.minC, units)}°</span>
+              </span>
+            </div>
+          ))}
+        </div>
+      )}
     </div>
   )
 }

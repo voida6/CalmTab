@@ -165,9 +165,17 @@ select {
   right: clamp(40px, 6vw, 120px);
   transform: translateY(-50%);
   width: clamp(360px, 34vw, 480px);
+  max-height: 92vh;
+  overflow-y: auto;
   display: flex;
   flex-direction: column;
-  gap: 28px;
+  gap: 22px;
+  padding: 4px;
+  scrollbar-width: thin;
+}
+
+.right-col::-webkit-scrollbar {
+  width: 0;
 }
 
 .card {
@@ -887,12 +895,27 @@ select {
 
 .analog-face {
   fill: var(--surface-container-high);
+  stroke: color-mix(in srgb, var(--on-surface) 14%, transparent);
+  stroke-width: 1.5;
 }
 
 .app.glass .analog-face {
-  fill: color-mix(in srgb, var(--surface-container-high) var(--card-opacity, 70%), transparent);
+  fill: color-mix(in srgb, var(--surface-container-high) 88%, transparent);
 }
 
+.analog-tick {
+  stroke: var(--on-surface-variant);
+  stroke-width: 2;
+  stroke-linecap: round;
+}
+
+.analog-tick.major {
+  stroke: var(--on-surface);
+  stroke-width: 3.5;
+}
+
+/* Hour + minute share the on-surface color (distinguished by length/weight);
+   the second hand is the thin accent pop. */
 .analog-hour {
   stroke: var(--on-surface);
   stroke-width: 7;
@@ -900,20 +923,322 @@ select {
 }
 
 .analog-min {
-  stroke: var(--primary-strong);
-  stroke-width: 5;
+  stroke: var(--on-surface);
+  stroke-width: 4.5;
   stroke-linecap: round;
 }
 
 .analog-sec {
-  stroke: var(--primary);
+  stroke: var(--primary-strong);
   stroke-width: 2.5;
   stroke-linecap: round;
-  opacity: 0.9;
 }
 
 .analog-cap {
   fill: var(--primary-strong);
+}
+
+/* ---------- Word clock ---------- */
+.word-clock {
+  max-width: 8ch;
+  user-select: none;
+}
+
+.word-lead {
+  display: block;
+  font-size: clamp(26px, 3.2vw, 44px);
+  font-weight: 600;
+  color: var(--on-bg, var(--on-surface));
+  opacity: 0.82;
+  text-shadow: var(--on-bg-shadow, none);
+}
+
+.word-hour {
+  display: block;
+  font-size: clamp(64px, 9vw, 132px);
+  font-weight: 600;
+  line-height: 1.05;
+  color: var(--primary-strong);
+  text-transform: capitalize;
+  text-shadow: var(--on-bg-shadow, none);
+}
+
+/* ---------- Flip clock ---------- */
+.flip-clock {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  perspective: 500px;
+  user-select: none;
+}
+
+.flip-card {
+  position: relative;
+  width: clamp(58px, 8vw, 116px);
+  height: clamp(82px, 12vw, 162px);
+  border-radius: 16px;
+  background: var(--surface-container-high);
+  display: grid;
+  place-items: center;
+  overflow: hidden;
+  box-shadow: var(--shadow-card);
+}
+
+.app.glass .flip-card {
+  background: color-mix(in srgb, var(--surface-container-high) var(--card-opacity, 70%), transparent);
+  backdrop-filter: blur(18px) saturate(140%);
+  -webkit-backdrop-filter: blur(18px) saturate(140%);
+}
+
+.flip-digit {
+  font-size: clamp(56px, 8vw, 116px);
+  font-weight: 700;
+  color: var(--on-surface);
+  font-variant-numeric: tabular-nums;
+  transform-origin: center;
+  animation: flip-in 0.4s cubic-bezier(0.2, 0.7, 0.2, 1);
+}
+
+@keyframes flip-in {
+  from {
+    transform: rotateX(-85deg);
+    opacity: 0.3;
+  }
+  to {
+    transform: none;
+    opacity: 1;
+  }
+}
+
+.flip-seam {
+  position: absolute;
+  left: 0;
+  right: 0;
+  top: 50%;
+  height: 2px;
+  background: rgba(0, 0, 0, 0.18);
+}
+
+.flip-colon {
+  font-size: clamp(40px, 6vw, 86px);
+  font-weight: 700;
+  color: var(--primary-strong);
+}
+
+.flip-suffix {
+  align-self: flex-start;
+  margin-top: 10px;
+  font-size: 18px;
+  font-weight: 600;
+  color: var(--primary);
+}
+
+/* ---------- Favicon shortcut icons ---------- */
+.favicon-img {
+  width: 24px;
+  height: 24px;
+  border-radius: 6px;
+  object-fit: contain;
+}
+
+/* ---------- Widget commons ---------- */
+.widget-label {
+  font-size: 14px;
+  font-weight: 600;
+  color: var(--primary);
+  margin-bottom: 4px;
+}
+
+.widget-head {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  margin-bottom: 8px;
+}
+
+.mini-input {
+  flex: 1;
+  background: var(--surface-container-high);
+  border: 1px solid var(--outline);
+  border-radius: 12px;
+  padding: 8px 12px;
+  font-size: 14px;
+  outline: none;
+  color: var(--on-surface);
+}
+
+.mini-input:focus {
+  border-color: var(--primary-strong);
+}
+
+/* Focus */
+.focus-input {
+  width: 100%;
+  background: transparent;
+  border: none;
+  outline: none;
+  font-size: 20px;
+  color: var(--on-surface);
+}
+
+.focus-input::placeholder {
+  color: var(--on-surface-variant);
+}
+
+.focus-input.is-done {
+  text-decoration: line-through;
+  opacity: 0.5;
+}
+
+/* Timer */
+.timer-time {
+  font-size: 46px;
+  font-weight: 600;
+  font-variant-numeric: tabular-nums;
+  color: var(--on-surface);
+  text-align: center;
+}
+
+.timer-bar {
+  height: 6px;
+  border-radius: var(--radius-pill);
+  background: var(--track);
+  overflow: hidden;
+  margin: 12px 0;
+}
+
+.timer-fill {
+  height: 100%;
+  background: var(--primary-strong);
+  border-radius: var(--radius-pill);
+  transition: width 0.3s linear;
+}
+
+.timer-actions {
+  display: flex;
+  gap: 10px;
+  justify-content: center;
+}
+
+.mode-pill {
+  background: var(--surface-container-high);
+  color: var(--primary);
+  border-radius: var(--radius-pill);
+  padding: 4px 12px;
+  font-size: 13px;
+}
+
+/* Habits */
+.habit-row {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  padding: 6px 0;
+}
+
+.habit-name {
+  flex: 1;
+  font-size: 15px;
+}
+
+.habit-name.is-done {
+  opacity: 0.6;
+}
+
+.habit-streak {
+  font-size: 13px;
+  color: var(--on-surface-variant);
+}
+
+.habit-del {
+  padding: 4px;
+}
+
+/* Countdown */
+.countdown-main {
+  display: flex;
+  align-items: baseline;
+  gap: 8px;
+}
+
+.countdown-num {
+  font-size: 52px;
+  font-weight: 600;
+  color: var(--primary-strong);
+  line-height: 1;
+}
+
+.countdown-unit {
+  font-size: 18px;
+  color: var(--on-surface-variant);
+}
+
+/* Ticker */
+.ticker-row {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  padding: 5px 0;
+  font-size: 15px;
+}
+
+.ticker-name {
+  flex: 1;
+  text-transform: capitalize;
+}
+
+.ticker-price {
+  font-variant-numeric: tabular-nums;
+}
+
+.ticker-change {
+  font-size: 13px;
+  min-width: 66px;
+  text-align: right;
+}
+
+.ticker-change.up {
+  color: #3ecf8e;
+}
+
+.ticker-change.down {
+  color: #ff6b6b;
+}
+
+/* Forecast strip */
+.forecast-strip {
+  display: flex;
+  gap: 8px;
+  margin-top: 14px;
+}
+
+.forecast-day {
+  flex: 1;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 4px;
+  padding: 8px 4px;
+  border-radius: 14px;
+  background: var(--surface-container-high);
+}
+
+.app.glass .forecast-day {
+  background: color-mix(in srgb, var(--surface-container-high) 55%, transparent);
+}
+
+.forecast-dow {
+  font-size: 12px;
+  color: var(--on-surface-variant);
+}
+
+.forecast-ico {
+  color: var(--primary);
+  display: inline-flex;
+}
+
+.forecast-temps {
+  font-size: 13px;
 }
 
 /* ---------- AI Tools popover ---------- */

@@ -5,6 +5,7 @@ import type {
   ClockStyle,
   ColorMode,
   ColorScheme,
+  IconStyle,
   LinkItem,
   Settings,
   ThemeName,
@@ -38,6 +39,12 @@ const THEMES: { id: ThemeName; label: string }[] = [
 
 const WIDGETS: { key: keyof WidgetToggles; label: string }[] = [
   { key: 'weather', label: 'Weather' },
+  { key: 'forecast', label: '3-day forecast' },
+  { key: 'focus', label: 'Daily focus' },
+  { key: 'timer', label: 'Focus timer' },
+  { key: 'habits', label: 'Habits' },
+  { key: 'countdown', label: 'Countdown' },
+  { key: 'ticker', label: 'Crypto ticker' },
   { key: 'search', label: 'Search bar' },
   { key: 'quote', label: 'Daily quote' },
   { key: 'dock', label: 'Quick links' },
@@ -108,9 +115,13 @@ export function SettingsPanel({ settings, setSettings, links, setLinks, wallpape
           <label>Clock</label>
           <select value={settings.clockStyle} onChange={(e) => patch({ clockStyle: e.target.value as ClockStyle })}>
             <option value="digital">Digital</option>
-            <option value="analog">Analog</option>
+            <option value="minimal">Minimal (HH:MM)</option>
+            <option value="analog">Analog (flower)</option>
+            <option value="analogClassic">Analog (classic)</option>
+            <option value="word">Word clock</option>
+            <option value="flip">Flip clock</option>
           </select>
-          {settings.clockStyle === 'digital' && (
+          {['digital', 'minimal', 'flip'].includes(settings.clockStyle) && (
             <div className="row between" style={{ padding: '8px 0 2px' }}>
               <span>12-hour (AM/PM)</span>
               <button
@@ -128,6 +139,14 @@ export function SettingsPanel({ settings, setSettings, links, setLinks, wallpape
             <option value="rounded">Rounded</option>
             <option value="squircle">Squircle</option>
             <option value="pill">Pill / Circle</option>
+          </select>
+        </div>
+
+        <div className="field">
+          <label>Shortcut icons</label>
+          <select value={settings.iconStyle} onChange={(e) => patch({ iconStyle: e.target.value as IconStyle })}>
+            <option value="themed">Themed (match palette)</option>
+            <option value="favicon">Favicons (full color)</option>
           </select>
         </div>
 
@@ -304,6 +323,41 @@ export function SettingsPanel({ settings, setSettings, links, setLinks, wallpape
             </div>
           ))}
         </div>
+
+        {settings.show.countdown && (
+          <div className="field">
+            <label>Countdown</label>
+            <input
+              placeholder="Label (e.g. Trip to Japan)"
+              value={settings.countdown.label}
+              onChange={(e) => setSettings((p) => ({ ...p, countdown: { ...p.countdown, label: e.target.value } }))}
+            />
+            <input
+              type="date"
+              value={settings.countdown.date}
+              onChange={(e) => setSettings((p) => ({ ...p, countdown: { ...p.countdown, date: e.target.value } }))}
+            />
+          </div>
+        )}
+
+        {settings.show.ticker && (
+          <div className="field">
+            <label>Crypto (CoinGecko ids, comma-separated)</label>
+            <input
+              placeholder="bitcoin, ethereum, solana"
+              value={settings.tickerSymbols.join(', ')}
+              onChange={(e) =>
+                setSettings((p) => ({
+                  ...p,
+                  tickerSymbols: e.target.value
+                    .split(',')
+                    .map((s) => s.trim().toLowerCase())
+                    .filter(Boolean),
+                }))
+              }
+            />
+          </div>
+        )}
 
         <div className="field">
           <label>Quick links</label>
