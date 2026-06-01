@@ -16,6 +16,9 @@
       root.dataset.theme = b.theme
     }
     if (b.fade != null) s.setProperty('--fade', b.fade + 'ms')
+    if (b.cardOpacity != null) s.setProperty('--card-opacity', b.cardOpacity + '%')
+    if (b.onBg) s.setProperty('--on-bg', b.onBg)
+    if (b.onBgShadow) s.setProperty('--on-bg-shadow', b.onBgShadow)
     if (b.dataUrl) {
       s.setProperty('--wp-image', 'url(' + b.dataUrl + ')')
       s.setProperty('--wp-blur', (b.blur || 0) + 'px')

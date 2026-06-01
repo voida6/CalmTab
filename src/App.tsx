@@ -13,6 +13,8 @@ import { AppsDrawer } from './components/AppsDrawer'
 import { GearIcon, GridIcon, ListIcon, MoonIcon, SparkleIcon, SunIcon } from './components/Icons'
 import { useStoredState } from './hooks/useStoredState'
 import {
+  BTN_RADIUS,
+  CARD_RADIUS,
   DEFAULT_LINKS,
   DEFAULT_SETTINGS,
   DEFAULT_WALLPAPER,
@@ -23,11 +25,7 @@ import {
   type TodoItem,
   type WallpaperState,
 } from './lib/types'
-import { paletteFromImage, PALETTE_TOKENS } from './lib/dynamicColor'
-
-function signature(dataUrl: string, scheme: string): string {
-  return `${scheme}:${dataUrl.length}:${dataUrl.slice(0, 48)}`
-}
+import { analyzeImage, paletteFromHex, PALETTE_TOKENS } from './lib/dynamicColor'
 
 type Panel = 'none' | 'todo' | 'settings' | 'apps' | 'ai'
 
@@ -56,15 +54,46 @@ export default function App() {
 
   const hasWallpaper = !!wallpaper.dataUrl
   const useAuto = settings.colorMode === 'auto' && hasWallpaper && !!wallpaper.palette
+  const accentSeed = settings.accentMode === 'custom' ? settings.accentColor : wallpaper.seed
 
-  // Recompute the palette when the wallpaper image OR the light/dark scheme
-  // changes (the signature encodes both, so it's cached otherwise).
+  // 1) Analyze a new wallpaper once: brightness (for text contrast) + candidate
+  // accent colors. Clears the palette so it rebuilds from the fresh analysis.
   useEffect(() => {
     if (!hasWallpaper) return
-    const sig = signature(wallpaper.dataUrl, settings.colorScheme)
+    // Re-analyze if not yet done, or if the stored swatches are in an older
+    // format (objects expected) — guards against a crash after the schema change.
+    const swatchesValid = (wallpaper.swatches || []).every((s) => s && typeof s === 'object' && 'seed' in s)
+    if (wallpaper.analyzedFor === wallpaper.dataUrl && swatchesValid) return
+    let active = true
+    analyzeImage(wallpaper.dataUrl)
+      .then((a) => {
+        if (!active) return
+        setWallpaper((w) => ({
+          ...w,
+          luminance: a.luminance,
+          swatches: a.swatches,
+          seed: a.seed,
+          analyzedFor: w.dataUrl,
+          palette: null,
+          sig: '',
+        }))
+      })
+      .catch(() => undefined)
+    return () => {
+      active = false
+    }
+  }, [wallpaper.dataUrl])
+
+  // 2) Build the palette from the chosen seed (image's or a custom color) for the
+  // current light/dark scheme. Cached via a signature of those inputs.
+  useEffect(() => {
+    if (!hasWallpaper) return
+    if (settings.accentMode === 'auto' && !wallpaper.seed) return // wait for analysis
+    const seed = accentSeed || '#7c6bdc'
+    const sig = `${settings.colorScheme}:${settings.accentMode}:${seed}`
     if (wallpaper.sig === sig && wallpaper.palette) return
     let active = true
-    paletteFromImage(wallpaper.dataUrl, settings.colorScheme)
+    paletteFromHex(seed, settings.colorScheme)
       .then((palette) => {
         if (active) setWallpaper((w) => ({ ...w, palette, sig }))
       })
@@ -72,7 +101,29 @@ export default function App() {
     return () => {
       active = false
     }
-  }, [wallpaper.dataUrl, settings.colorScheme])
+  }, [hasWallpaper, accentSeed, wallpaper.seed, settings.colorScheme, settings.accentMode])
+
+  // Hero text contrast: pick light/dark text for clock/greeting based on how
+  // bright the wallpaper is behind them (accounting for the dim overlay).
+  useEffect(() => {
+    const s = document.documentElement.style
+    if (hasWallpaper) {
+      const effLum = (wallpaper.luminance ?? 128) * (1 - (settings.background.dim / 100) * 0.9)
+      const light = effLum < 140
+      s.setProperty('--on-bg', light ? '#f3f3f6' : '#17181c')
+      s.setProperty('--on-bg-shadow', light ? '0 2px 14px rgba(0,0,0,0.55)' : '0 1px 10px rgba(255,255,255,0.5)')
+    } else {
+      s.removeProperty('--on-bg')
+      s.removeProperty('--on-bg-shadow')
+    }
+  }, [hasWallpaper, wallpaper.luminance, settings.background.dim])
+
+  // Card corner shape -> --radius-card (cards) and --radius-btn (buttons/tiles).
+  useEffect(() => {
+    const s = document.documentElement.style
+    s.setProperty('--radius-card', CARD_RADIUS[settings.cardShape])
+    s.setProperty('--radius-btn', BTN_RADIUS[settings.cardShape])
+  }, [settings.cardShape])
 
   // Apply colors: inline CSS-var overrides for auto mode, else named theme.
   useEffect(() => {
@@ -89,6 +140,7 @@ export default function App() {
   useEffect(() => {
     const s = document.documentElement.style
     s.setProperty('--fade', `${settings.background.fade}ms`)
+    s.setProperty('--card-opacity', `${settings.background.cardOpacity}%`)
     if (hasWallpaper) {
       s.setProperty('--wp-image', `url(${wallpaper.dataUrl})`)
       s.setProperty('--wp-blur', `${settings.background.blur}px`)
@@ -98,10 +150,19 @@ export default function App() {
       s.setProperty('--wp-on', '0')
       s.removeProperty('--wp-image')
     }
-  }, [hasWallpaper, wallpaper.dataUrl, settings.background.blur, settings.background.dim, settings.background.fade])
+  }, [
+    hasWallpaper,
+    wallpaper.dataUrl,
+    settings.background.blur,
+    settings.background.dim,
+    settings.background.fade,
+    settings.background.cardOpacity,
+  ])
 
   // Cache a synchronous snapshot for the boot script to apply on the next load.
   useEffect(() => {
+    const effLum = (wallpaper.luminance ?? 128) * (1 - (settings.background.dim / 100) * 0.9)
+    const lightText = effLum < 140
     const boot = {
       useAuto,
       theme: settings.theme,
@@ -110,6 +171,13 @@ export default function App() {
       blur: settings.background.blur,
       dim: settings.background.dim,
       fade: settings.background.fade,
+      cardOpacity: settings.background.cardOpacity,
+      onBg: hasWallpaper ? (lightText ? '#f3f3f6' : '#17181c') : null,
+      onBgShadow: hasWallpaper
+        ? lightText
+          ? '0 2px 14px rgba(0,0,0,0.55)'
+          : '0 1px 10px rgba(255,255,255,0.5)'
+        : null,
     }
     try {
       localStorage.setItem('calmtab-boot', JSON.stringify(boot))
@@ -118,12 +186,15 @@ export default function App() {
     }
   }, [
     useAuto,
+    hasWallpaper,
     settings.theme,
     wallpaper.palette,
     wallpaper.dataUrl,
+    wallpaper.luminance,
     settings.background.blur,
     settings.background.dim,
     settings.background.fade,
+    settings.background.cardOpacity,
   ])
 
   const openTodos = todos.filter((t) => !t.done).length
@@ -167,12 +238,20 @@ export default function App() {
       </button>
 
       <button
-        className="corner-btn top-right-2"
+        className={`appearance-switch ${isLight ? 'is-light' : 'is-dark'}`}
         onClick={toggleAppearance}
         data-label={isLight ? 'Switch to dark' : 'Switch to light'}
         aria-label="Toggle light or dark mode"
+        role="switch"
+        aria-checked={isLight}
       >
-        {isLight ? <MoonIcon /> : <SunIcon />}
+        <span className="end-icon left">
+          <SunIcon size={13} />
+        </span>
+        <span className="end-icon right">
+          <MoonIcon size={13} />
+        </span>
+        <span className="appearance-knob">{isLight ? <SunIcon size={14} /> : <MoonIcon size={14} />}</span>
       </button>
 
       <button

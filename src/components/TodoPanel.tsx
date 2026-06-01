@@ -26,8 +26,8 @@ export function TodoPanel({ todos, setTodos, onClose }: Props) {
 
   return (
     <>
-      <div className="scrim" onClick={onClose} />
-      <aside className="panel left">
+      <div className="scrim transparent" onClick={onClose} />
+      <aside className="panel anchor-tl">
         <div className="row between">
           <h2>Tasks</h2>
           <button className="btn-ghost" onClick={onClose} aria-label="Close">

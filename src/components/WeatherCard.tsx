@@ -1,6 +1,7 @@
 import { useEffect, useState } from 'react'
-import { fetchWeather, describeCode, toDisplayTemp, type Weather } from '../lib/weather'
+import { fetchWeather, toDisplayTemp, type Weather } from '../lib/weather'
 import { getItem, setItem } from '../lib/storage'
+import { WeatherIcon } from './WeatherIcon'
 import type { Units } from '../lib/types'
 
 const CACHE_KEY = 'weatherCache'
@@ -47,7 +48,6 @@ export function WeatherCard({ city, units }: Props) {
     )
   }
 
-  const { icon } = describeCode(wx.code)
   const unit = units === 'imperial' ? '°F' : '°'
 
   return (
@@ -55,7 +55,9 @@ export function WeatherCard({ city, units }: Props) {
       <div className="weather-top">
         <div className="weather-title">{wx.description}</div>
         <div className="weather-temp">
-          <span className="wx-icon">{icon}</span>
+          <span className="wx-icon">
+            <WeatherIcon code={wx.code} size={40} />
+          </span>
           <span>
             {toDisplayTemp(wx.tempC, units)}
             {unit}

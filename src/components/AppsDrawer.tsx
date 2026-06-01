@@ -5,8 +5,8 @@ import { XIcon } from './Icons'
 export function AppsDrawer({ onClose }: { onClose: () => void }) {
   return (
     <>
-      <div className="scrim" onClick={onClose} />
-      <aside className="panel right">
+      <div className="scrim transparent" onClick={onClose} />
+      <aside className="panel anchor-tr">
         <div className="row between">
           <h2>Apps</h2>
           <button className="btn-ghost" onClick={onClose} aria-label="Close">

@@ -2,6 +2,22 @@ export type ThemeName = 'purple' | 'midnight' | 'teal' | 'peach' | 'mint' | 'lav
 export type Units = 'metric' | 'imperial'
 export type ClockStyle = 'digital' | 'analog'
 export type ColorScheme = 'dark' | 'light'
+export type CardShape = 'rounded' | 'squircle' | 'pill'
+
+// Card corner radius per shape (applied to --radius-card).
+export const CARD_RADIUS: Record<CardShape, string> = {
+  rounded: '14px',
+  squircle: '30px',
+  pill: '999px',
+}
+
+// Smaller radius applied to buttons/icon tiles so the shape reads on small
+// square elements (squircle stays distinct from a full circle).
+export const BTN_RADIUS: Record<CardShape, string> = {
+  rounded: '12px',
+  squircle: '18px',
+  pill: '999px',
+}
 
 // Which manual themes are light (used to flip the color-scheme hint).
 export const LIGHT_THEMES: ThemeName[] = ['peach', 'mint', 'lavender']
@@ -42,16 +58,22 @@ export interface BackgroundSettings {
   blur: number // px, 0-30
   dim: number // % darkening overlay, 0-80
   glass: boolean // frosted-glass cards
+  cardOpacity: number // % surface opacity for glass cards, 30-100
   fade: number // content fade-in duration, ms (0 = instant)
 }
+
+export type AccentMode = 'auto' | 'custom'
 
 export interface Settings {
   name: string
   theme: ThemeName
   colorMode: ColorMode
   colorScheme: ColorScheme // light/dark tones for auto-from-wallpaper
+  accentMode: AccentMode // 'auto' = from wallpaper, 'custom' = chosen color
+  accentColor: string // hex seed used when accentMode === 'custom'
   clockStyle: ClockStyle
   hour12: boolean
+  cardShape: CardShape
   units: Units
   city: string
   tagline: string
@@ -64,26 +86,41 @@ export const DEFAULT_SETTINGS: Settings = {
   theme: 'purple',
   colorMode: 'auto',
   colorScheme: 'dark',
+  accentMode: 'auto',
+  accentColor: '#7c6bdc',
   clockStyle: 'digital',
   hour12: false,
+  cardShape: 'squircle',
   units: 'metric',
   city: 'Melbourne',
   tagline: 'LOCK IN',
   show: { weather: true, search: true, quote: true, dock: true },
-  background: { blur: 3, dim: 35, glass: true, fade: 300 },
+  background: { blur: 3, dim: 35, glass: true, cardOpacity: 70, fade: 300 },
 }
 
 // Wallpaper + its extracted palette live in their own storage key (the data URL
 // can be large; keeping it out of `settings` avoids rewriting it on every tweak).
-import type { Palette } from './dynamicColor'
+import type { Palette, Swatch } from './dynamicColor'
 
 export interface WallpaperState {
   dataUrl: string
   palette: Palette | null
-  sig: string // signature of the image the palette was computed from
+  sig: string // signature of (image + scheme + accent) the palette was built from
+  luminance: number // brightness behind the hero region (0-255)
+  swatches: Swatch[] // candidate accent colors (seed + preview) from the image
+  seed: string // top extracted color (hex)
+  analyzedFor: string // dataUrl the analysis (luminance/swatches/seed) was run on
 }
 
-export const DEFAULT_WALLPAPER: WallpaperState = { dataUrl: '', palette: null, sig: '' }
+export const DEFAULT_WALLPAPER: WallpaperState = {
+  dataUrl: '',
+  palette: null,
+  sig: '',
+  luminance: 128,
+  swatches: [],
+  seed: '',
+  analyzedFor: '',
+}
 
 export const DEFAULT_LINKS: LinkItem[] = [
   { id: 'yt', name: 'YouTube', url: 'https://youtube.com' },

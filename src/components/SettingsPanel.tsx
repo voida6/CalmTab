@@ -1,5 +1,7 @@
 import { useRef, useState } from 'react'
 import type {
+  AccentMode,
+  CardShape,
   ClockStyle,
   ColorMode,
   ColorScheme,
@@ -10,8 +12,9 @@ import type {
   WallpaperState,
   WidgetToggles,
 } from '../lib/types'
-import { uid } from '../lib/types'
+import { DEFAULT_WALLPAPER, uid } from '../lib/types'
 import { fileToScaledDataUrl } from '../lib/image'
+import { CityInput } from './CityInput'
 import { PlusIcon, XIcon } from './Icons'
 
 interface Props {
@@ -58,15 +61,15 @@ export function SettingsPanel({ settings, setSettings, links, setLinks, wallpape
     setUploading(true)
     try {
       const dataUrl = await fileToScaledDataUrl(file)
-      // Clear the old palette so the apply effect recomputes for the new image.
-      setWallpaper(() => ({ dataUrl, palette: null, sig: '' }))
+      // Reset so the new image is re-analyzed and its palette rebuilt.
+      setWallpaper(() => ({ ...DEFAULT_WALLPAPER, dataUrl }))
     } finally {
       setUploading(false)
       if (fileRef.current) fileRef.current.value = ''
     }
   }
 
-  const removeWallpaper = () => setWallpaper(() => ({ dataUrl: '', palette: null, sig: '' }))
+  const removeWallpaper = () => setWallpaper(() => ({ ...DEFAULT_WALLPAPER }))
 
   const addLink = () => {
     const name = linkName.trim()
@@ -82,8 +85,8 @@ export function SettingsPanel({ settings, setSettings, links, setLinks, wallpape
 
   return (
     <>
-      <div className="scrim" onClick={onClose} />
-      <aside className="panel right">
+      <div className="scrim transparent" onClick={onClose} />
+      <aside className="panel anchor-br">
         <div className="row between">
           <h2>Settings</h2>
           <button className="btn-ghost" onClick={onClose} aria-label="Close">
@@ -117,6 +120,15 @@ export function SettingsPanel({ settings, setSettings, links, setLinks, wallpape
               />
             </div>
           )}
+        </div>
+
+        <div className="field">
+          <label>Card shape</label>
+          <select value={settings.cardShape} onChange={(e) => patch({ cardShape: e.target.value as CardShape })}>
+            <option value="rounded">Rounded</option>
+            <option value="squircle">Squircle</option>
+            <option value="pill">Pill / Circle</option>
+          </select>
         </div>
 
         {/* ---------- Background ---------- */}
@@ -177,6 +189,18 @@ export function SettingsPanel({ settings, setSettings, links, setLinks, wallpape
                 aria-label="Toggle frosted glass"
               />
             </div>
+            {settings.background.glass && (
+              <div className="field">
+                <label>Card opacity — {settings.background.cardOpacity}%</label>
+                <input
+                  type="range"
+                  min={30}
+                  max={100}
+                  value={settings.background.cardOpacity}
+                  onChange={(e) => patchBg({ cardOpacity: Number(e.target.value) })}
+                />
+              </div>
+            )}
           </>
         )}
 
@@ -204,6 +228,43 @@ export function SettingsPanel({ settings, setSettings, links, setLinks, wallpape
           )}
         </div>
 
+        {settings.colorMode === 'auto' && hasWallpaper && (
+          <div className="field">
+            <label>Accent color</label>
+            <div className="swatch-row">
+              <button
+                className={`swatch auto ${settings.accentMode === 'auto' ? 'active' : ''}`}
+                onClick={() => patch({ accentMode: 'auto' as AccentMode })}
+                title="Auto from wallpaper"
+                aria-label="Auto accent"
+              >
+                A
+              </button>
+              {(wallpaper.swatches || []).filter((sw) => sw && typeof sw === 'object' && sw.seed).map((sw) => (
+                <button
+                  key={sw.seed}
+                  className={`swatch ${
+                    settings.accentMode === 'custom' && settings.accentColor.toLowerCase() === sw.seed.toLowerCase()
+                      ? 'active'
+                      : ''
+                  }`}
+                  style={{ background: sw.color }}
+                  onClick={() => patch({ accentMode: 'custom' as AccentMode, accentColor: sw.seed })}
+                  title={sw.color}
+                  aria-label={`Accent ${sw.color}`}
+                />
+              ))}
+              <label className="swatch custom" title="Custom color">
+                <input
+                  type="color"
+                  value={settings.accentColor}
+                  onChange={(e) => patch({ accentMode: 'custom' as AccentMode, accentColor: e.target.value })}
+                />
+              </label>
+            </div>
+          </div>
+        )}
+
         {(settings.colorMode === 'manual' || !hasWallpaper) && (
           <div className="field">
             <label>Theme</label>
@@ -219,7 +280,7 @@ export function SettingsPanel({ settings, setSettings, links, setLinks, wallpape
 
         <div className="field">
           <label>City (for weather)</label>
-          <input value={settings.city} onChange={(e) => patch({ city: e.target.value })} />
+          <CityInput value={settings.city} onChange={(city) => patch({ city })} />
         </div>
 
         <div className="field">
