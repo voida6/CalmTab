@@ -46,6 +46,46 @@
   --track: #2f5052;
 }
 
+/* ---- Light pastel themes (Mynt-style) ---- */
+:root[data-theme='peach'] {
+  --bg: #fff1ea;
+  --surface: #fff6f1;
+  --surface-container: #ffe9df;
+  --surface-container-high: #ffded0;
+  --primary: #c2410c;
+  --primary-strong: #b5451f;
+  --on-surface: #3b2a22;
+  --on-surface-variant: #7a5c4e;
+  --outline: #e7c8b8;
+  --track: #f3d6c8;
+}
+
+:root[data-theme='mint'] {
+  --bg: #eaf7f1;
+  --surface: #f1faf5;
+  --surface-container: #dcf0e6;
+  --surface-container-high: #cde9d9;
+  --primary: #0f7a5a;
+  --primary-strong: #0d6e51;
+  --on-surface: #1f3d32;
+  --on-surface-variant: #4f7766;
+  --outline: #c4e1d3;
+  --track: #d4ecdf;
+}
+
+:root[data-theme='lavender'] {
+  --bg: #f3eefc;
+  --surface: #f8f4ff;
+  --surface-container: #ebe3f7;
+  --surface-container-high: #e1d6f3;
+  --primary: #6b3fb0;
+  --primary-strong: #5e35a0;
+  --on-surface: #2e2440;
+  --on-surface-variant: #6a5d80;
+  --outline: #dccaf0;
+  --track: #e4d9f4;
+}
+
 :root {
   --radius-card: 28px;
   --radius-pill: 999px;

@@ -1,6 +1,8 @@
 import { useRef, useState } from 'react'
 import type {
+  ClockStyle,
   ColorMode,
+  ColorScheme,
   LinkItem,
   Settings,
   ThemeName,
@@ -23,9 +25,12 @@ interface Props {
 }
 
 const THEMES: { id: ThemeName; label: string }[] = [
-  { id: 'purple', label: 'Dusk Purple' },
-  { id: 'midnight', label: 'Midnight' },
-  { id: 'teal', label: 'Deep Teal' },
+  { id: 'purple', label: 'Dusk Purple (dark)' },
+  { id: 'midnight', label: 'Midnight (dark)' },
+  { id: 'teal', label: 'Deep Teal (dark)' },
+  { id: 'peach', label: 'Peach (light)' },
+  { id: 'mint', label: 'Mint (light)' },
+  { id: 'lavender', label: 'Lavender (light)' },
 ]
 
 const WIDGETS: { key: keyof WidgetToggles; label: string }[] = [
@@ -94,6 +99,24 @@ export function SettingsPanel({ settings, setSettings, links, setLinks, wallpape
         <div className="field">
           <label>Tagline</label>
           <input value={settings.tagline} onChange={(e) => patch({ tagline: e.target.value })} />
+        </div>
+
+        <div className="field">
+          <label>Clock</label>
+          <select value={settings.clockStyle} onChange={(e) => patch({ clockStyle: e.target.value as ClockStyle })}>
+            <option value="digital">Digital</option>
+            <option value="analog">Analog</option>
+          </select>
+          {settings.clockStyle === 'digital' && (
+            <div className="row between" style={{ padding: '8px 0 2px' }}>
+              <span>12-hour (AM/PM)</span>
+              <button
+                className={`toggle ${settings.hour12 ? 'on' : ''}`}
+                onClick={() => patch({ hour12: !settings.hour12 })}
+                aria-label="Toggle 12-hour clock"
+              />
+            </div>
+          )}
         </div>
 
         {/* ---------- Background ---------- */}
@@ -166,6 +189,18 @@ export function SettingsPanel({ settings, setSettings, links, setLinks, wallpape
           </select>
           {settings.colorMode === 'auto' && !hasWallpaper && (
             <span className="muted">Upload a wallpaper to generate colors. Using the manual theme until then.</span>
+          )}
+          {settings.colorMode === 'auto' && hasWallpaper && (
+            <div className="row between" style={{ padding: '8px 0 2px' }}>
+              <span>Light mode</span>
+              <button
+                className={`toggle ${settings.colorScheme === 'light' ? 'on' : ''}`}
+                onClick={() =>
+                  patch({ colorScheme: settings.colorScheme === 'light' ? 'dark' : ('light' as ColorScheme) })
+                }
+                aria-label="Toggle light mode"
+              />
+            </div>
           )}
         </div>
 

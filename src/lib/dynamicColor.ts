@@ -43,7 +43,10 @@ function loadImage(src: string): Promise<HTMLImageElement> {
   })
 }
 
-export async function paletteFromImage(dataUrl: string): Promise<Palette> {
+export async function paletteFromImage(
+  dataUrl: string,
+  scheme: 'dark' | 'light' = 'dark',
+): Promise<Palette> {
   const { sourceColorFromImage, themeFromSourceColor, hexFromArgb } = await import(
     '@material/material-color-utilities'
   )
@@ -51,8 +54,24 @@ export async function paletteFromImage(dataUrl: string): Promise<Palette> {
   const source = await sourceColorFromImage(img)
   const { palettes } = themeFromSourceColor(source)
   const hx = (p: TonalPalette, tone: number) => hexFromArgb(p.tone(tone))
-  // Dark scheme tones (M3-ish): low-tone neutrals for surfaces, high for text,
-  // bright primary tones for accents.
+
+  if (scheme === 'light') {
+    // Light scheme: high-tone neutrals for surfaces, low for text.
+    return {
+      '--bg': hx(palettes.neutral, 96),
+      '--surface': hx(palettes.neutral, 98),
+      '--surface-container': hx(palettes.neutral, 92),
+      '--surface-container-high': hx(palettes.neutral, 88),
+      '--primary': hx(palettes.primary, 40),
+      '--primary-strong': hx(palettes.primary, 45),
+      '--on-surface': hx(palettes.neutral, 12),
+      '--on-surface-variant': hx(palettes.neutralVariant, 35),
+      '--outline': hx(palettes.neutralVariant, 60),
+      '--track': hx(palettes.primary, 85),
+    }
+  }
+
+  // Dark scheme: low-tone neutrals for surfaces, high for text, bright accents.
   return {
     '--bg': hx(palettes.neutral, 8),
     '--surface': hx(palettes.neutral, 12),

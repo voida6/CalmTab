@@ -449,7 +449,9 @@ select {
   transition: opacity 0.18s ease;
 }
 
-.corner-btn.top-left::after {
+.corner-btn.top-left::after,
+.corner-btn.top-right::after,
+.corner-btn.top-right-2::after {
   top: 124%;
 }
 
@@ -465,6 +467,16 @@ select {
 .top-left {
   top: 26px;
   left: 26px;
+}
+
+.top-right {
+  top: 26px;
+  right: 26px;
+}
+
+.top-right-2 {
+  top: 26px;
+  right: 84px;
 }
 
 .bottom-left {
@@ -668,4 +680,174 @@ select {
 
 .toggle.on::after {
   transform: translateX(18px);
+}
+
+/* ---------- Digital clock AM/PM ---------- */
+.clock-suffix {
+  font-size: 0.3em;
+  font-weight: 600;
+  margin-left: 0.18em;
+  vertical-align: 0.7em;
+  color: var(--primary);
+}
+
+/* ---------- Analog clock (Material You scalloped face) ---------- */
+.analog {
+  width: clamp(210px, 24vw, 320px);
+  height: clamp(210px, 24vw, 320px);
+  display: block;
+  filter: drop-shadow(0 8px 24px rgba(0, 0, 0, 0.18));
+}
+
+.analog-face {
+  fill: var(--surface-container-high);
+}
+
+.app.glass .analog-face {
+  fill: color-mix(in srgb, var(--surface-container-high) 78%, transparent);
+}
+
+.analog-hour {
+  stroke: var(--on-surface);
+  stroke-width: 7;
+  stroke-linecap: round;
+}
+
+.analog-min {
+  stroke: var(--primary-strong);
+  stroke-width: 5;
+  stroke-linecap: round;
+}
+
+.analog-sec {
+  stroke: var(--primary);
+  stroke-width: 2.5;
+  stroke-linecap: round;
+  opacity: 0.9;
+}
+
+.analog-cap {
+  fill: var(--primary-strong);
+}
+
+/* ---------- AI Tools popover ---------- */
+.scrim.transparent {
+  background: transparent;
+}
+
+.ai-menu {
+  position: absolute;
+  bottom: 84px;
+  left: 26px;
+  z-index: 12;
+  width: 220px;
+  background: var(--surface-container);
+  border-radius: 20px;
+  box-shadow: var(--shadow-card);
+  padding: 10px;
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  animation: pop-in 0.16s ease-out both;
+}
+
+.app.glass .ai-menu {
+  background: color-mix(in srgb, var(--surface-container) 70%, transparent);
+  backdrop-filter: blur(22px) saturate(150%);
+  -webkit-backdrop-filter: blur(22px) saturate(150%);
+}
+
+@keyframes pop-in {
+  from {
+    opacity: 0;
+    transform: translateY(8px) scale(0.98);
+  }
+  to {
+    opacity: 1;
+    transform: none;
+  }
+}
+
+.ai-menu-title {
+  font-size: 12px;
+  color: var(--on-surface-variant);
+  padding: 4px 10px 6px;
+}
+
+.ai-item {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  padding: 9px 10px;
+  border-radius: 12px;
+  color: var(--on-surface);
+  font-size: 15px;
+}
+
+.ai-item:hover {
+  background: var(--surface-container-high);
+}
+
+.ai-glyph {
+  width: 26px;
+  height: 26px;
+  display: grid;
+  place-items: center;
+  color: var(--primary);
+}
+
+.ai-glyph svg {
+  width: 22px;
+  height: 22px;
+}
+
+.ai-glyph .monogram {
+  font-weight: 700;
+}
+
+/* ---------- Apps grid ---------- */
+.apps-grid {
+  display: grid;
+  grid-template-columns: repeat(3, 1fr);
+  gap: 12px;
+  margin-top: 4px;
+}
+
+.app-tile {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 8px;
+  padding: 14px 6px;
+  border-radius: 16px;
+  color: var(--on-surface);
+}
+
+.app-tile:hover {
+  background: var(--surface-container-high);
+}
+
+.app-glyph {
+  width: 44px;
+  height: 44px;
+  border-radius: 14px;
+  display: grid;
+  place-items: center;
+  background: var(--surface-container-high);
+  color: var(--primary);
+}
+
+.app-glyph svg {
+  width: 24px;
+  height: 24px;
+}
+
+.app-glyph .monogram {
+  font-weight: 700;
+  font-size: 18px;
+}
+
+.app-name {
+  font-size: 12px;
+  color: var(--on-surface-variant);
 }

@@ -20,6 +20,16 @@ import {
   siDiscord,
   siTwitch,
   siWikipedia,
+  siGooglegemini,
+  siClaude,
+  siPerplexity,
+  siGoogledrive,
+  siGooglephotos,
+  siGooglemeet,
+  siGoogletranslate,
+  siGooglesheets,
+  siGooglenews,
+  siGooglekeep,
 } from 'simple-icons'
 
 // LinkedIn & Amazon were removed from simple-icons (brand policy) — hand-provided.
@@ -50,6 +60,18 @@ const ENTRIES: Entry[] = [
   { match: ['discord.com', 'discord.gg'], path: siDiscord.path },
   { match: ['twitch.tv'], path: siTwitch.path },
   { match: ['wikipedia.org'], path: siWikipedia.path },
+  // AI tools
+  { match: ['gemini.google.'], path: siGooglegemini.path },
+  { match: ['claude.ai'], path: siClaude.path },
+  { match: ['perplexity.ai'], path: siPerplexity.path },
+  // Google apps (specific hosts before the generic 'google.')
+  { match: ['drive.google.'], path: siGoogledrive.path },
+  { match: ['photos.google.'], path: siGooglephotos.path },
+  { match: ['meet.google.'], path: siGooglemeet.path },
+  { match: ['translate.google.'], path: siGoogletranslate.path },
+  { match: ['sheets.google.'], path: siGooglesheets.path },
+  { match: ['news.google.'], path: siGooglenews.path },
+  { match: ['keep.google.'], path: siGooglekeep.path },
   { match: ['google.'], path: siGoogle.path },
 ]
 
