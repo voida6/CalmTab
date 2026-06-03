@@ -26,6 +26,7 @@ export function ShortcutIcon({ url, name, style }: Props) {
     const src = faviconUrl(url)
     return src ? <img className="favicon-img" src={src} alt={name} /> : <Monogram name={name} />
   }
+  // Themed: a palette-tinted glyph if one exists, else a plain capital-letter monogram.
   const path = brandGlyph(url)
   return path ? (
     <svg viewBox="0 0 24 24" aria-hidden="true">

@@ -41,9 +41,9 @@ const WIDGETS: { key: keyof WidgetToggles; label: string }[] = [
   { key: 'weather', label: 'Weather' },
   { key: 'forecast', label: '3-day forecast' },
   { key: 'focus', label: 'Daily focus' },
-  { key: 'timer', label: 'Focus timer' },
+  { key: 'timer', label: 'Pomodoro' },
+  { key: 'quickTimer', label: 'Timer' },
   { key: 'habits', label: 'Habits' },
-  { key: 'countdown', label: 'Countdown' },
   { key: 'ticker', label: 'Crypto ticker' },
   { key: 'search', label: 'Search bar' },
   { key: 'quote', label: 'Daily quote' },
@@ -323,22 +323,6 @@ export function SettingsPanel({ settings, setSettings, links, setLinks, wallpape
             </div>
           ))}
         </div>
-
-        {settings.show.countdown && (
-          <div className="field">
-            <label>Countdown</label>
-            <input
-              placeholder="Label (e.g. Trip to Japan)"
-              value={settings.countdown.label}
-              onChange={(e) => setSettings((p) => ({ ...p, countdown: { ...p.countdown, label: e.target.value } }))}
-            />
-            <input
-              type="date"
-              value={settings.countdown.date}
-              onChange={(e) => setSettings((p) => ({ ...p, countdown: { ...p.countdown, date: e.target.value } }))}
-            />
-          </div>
-        )}
 
         {settings.show.ticker && (
           <div className="field">

@@ -50,18 +50,13 @@ export interface WidgetToggles {
   weather: boolean
   forecast: boolean // 3-day strip on the weather card
   focus: boolean
-  timer: boolean
+  timer: boolean // Pomodoro focus timer
+  quickTimer: boolean // editable countdown timer
   habits: boolean
-  countdown: boolean
   ticker: boolean
   search: boolean
   quote: boolean
   dock: boolean
-}
-
-export interface CountdownSettings {
-  label: string
-  date: string // YYYY-MM-DD
 }
 
 export interface FocusState {
@@ -104,7 +99,6 @@ export interface Settings {
   units: Units
   city: string
   tagline: string
-  countdown: CountdownSettings
   tickerSymbols: string[] // CoinGecko coin ids (e.g. bitcoin, ethereum)
   show: WidgetToggles
   background: BackgroundSettings
@@ -124,15 +118,14 @@ export const DEFAULT_SETTINGS: Settings = {
   units: 'metric',
   city: 'Melbourne',
   tagline: 'LOCK IN',
-  countdown: { label: 'Countdown', date: '' },
   tickerSymbols: ['bitcoin', 'ethereum'],
   show: {
     weather: true,
     forecast: false,
     focus: true,
     timer: false,
+    quickTimer: false,
     habits: false,
-    countdown: false,
     ticker: false,
     search: false,
     quote: false,

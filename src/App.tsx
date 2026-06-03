@@ -8,7 +8,7 @@ import { WeatherCard } from './components/WeatherCard'
 import { FocusWidget } from './components/FocusWidget'
 import { TimerWidget } from './components/TimerWidget'
 import { HabitsWidget } from './components/HabitsWidget'
-import { CountdownWidget } from './components/CountdownWidget'
+import { QuickTimerWidget } from './components/QuickTimerWidget'
 import { TickerWidget } from './components/TickerWidget'
 import { SearchBar } from './components/SearchBar'
 import { QuoteCard } from './components/QuoteCard'
@@ -251,7 +251,7 @@ export default function App() {
         {settings.show.focus && <FocusWidget />}
         {settings.show.timer && <TimerWidget />}
         {settings.show.habits && <HabitsWidget />}
-        {settings.show.countdown && <CountdownWidget countdown={settings.countdown} />}
+        {settings.show.quickTimer && <QuickTimerWidget />}
         {settings.show.ticker && <TickerWidget symbols={settings.tickerSymbols} />}
         {settings.show.search && <SearchBar />}
         {settings.show.quote && <QuoteCard />}
