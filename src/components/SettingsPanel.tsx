@@ -39,7 +39,8 @@ const THEMES: { id: ThemeName; label: string }[] = [
 
 const WIDGETS: { key: keyof WidgetToggles; label: string }[] = [
   { key: 'weather', label: 'Weather' },
-  { key: 'forecast', label: '3-day forecast' },
+  { key: 'forecast', label: 'Weather details (start open)' },
+  { key: 'pinnedTasks', label: 'Pin tasks under greeting' },
   { key: 'focus', label: 'Daily focus' },
   { key: 'timer', label: 'Pomodoro' },
   { key: 'quickTimer', label: 'Timer' },

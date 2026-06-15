@@ -8,6 +8,12 @@ export interface DayForecast {
   maxC: number
 }
 
+export interface HourForecast {
+  time: string // ISO datetime
+  code: number
+  tempC: number
+}
+
 export interface Weather {
   city: string
   tempC: number
@@ -16,7 +22,13 @@ export interface Weather {
   humidity: number
   code: number
   description: string
-  forecast: DayForecast[]
+  feelsLikeC: number
+  windKmh: number
+  uv: number
+  sunrise: string // ISO
+  sunset: string // ISO
+  forecast: DayForecast[] // 7 days
+  hourly: HourForecast[] // next ~24h
   fetchedAt: number
 }
 
@@ -71,31 +83,66 @@ export async function fetchWeather(city: string): Promise<Weather | null> {
   const url =
     `https://api.open-meteo.com/v1/forecast?latitude=${place.latitude}` +
     `&longitude=${place.longitude}` +
-    '&current=temperature_2m,relative_humidity_2m,weather_code' +
-    '&daily=weather_code,temperature_2m_max,temperature_2m_min&forecast_days=4&timezone=auto'
+    '&current=temperature_2m,relative_humidity_2m,apparent_temperature,weather_code,wind_speed_10m' +
+    '&hourly=temperature_2m,weather_code' +
+    '&daily=weather_code,temperature_2m_max,temperature_2m_min,sunrise,sunset,uv_index_max' +
+    '&forecast_days=7&timezone=auto'
   const res = await fetch(url)
   if (!res.ok) return null
   const d = (await res.json()) as {
-    current: { temperature_2m: number; relative_humidity_2m: number; weather_code: number }
-    daily: { time: string[]; weather_code: number[]; temperature_2m_max: number[]; temperature_2m_min: number[] }
+    current: {
+      temperature_2m: number
+      relative_humidity_2m: number
+      apparent_temperature: number
+      weather_code: number
+      wind_speed_10m: number
+    }
+    hourly: { time: string[]; temperature_2m: number[]; weather_code: number[] }
+    daily: {
+      time: string[]
+      weather_code: number[]
+      temperature_2m_max: number[]
+      temperature_2m_min: number[]
+      sunrise: string[]
+      sunset: string[]
+      uv_index_max: number[]
+    }
   }
   const { label } = describeCode(d.current.weather_code)
-  // Next 3 days (skip today at index 0).
-  const forecast: DayForecast[] = d.daily.time.slice(1, 4).map((date, i) => ({
+
+  // 7-day outlook (today + next 6).
+  const forecast: DayForecast[] = d.daily.time.slice(0, 7).map((date, i) => ({
     date,
-    code: d.daily.weather_code[i + 1],
-    maxC: d.daily.temperature_2m_max[i + 1],
-    minC: d.daily.temperature_2m_min[i + 1],
+    code: d.daily.weather_code[i],
+    maxC: d.daily.temperature_2m_max[i],
+    minC: d.daily.temperature_2m_min[i],
   }))
+
+  // Next ~24 hours starting from the current hour.
+  const now = Date.now()
+  let start = d.hourly.time.findIndex((t) => new Date(t).getTime() >= now - 3_600_000)
+  if (start < 0) start = 0
+  const hourly: HourForecast[] = d.hourly.time.slice(start, start + 24).map((time, i) => ({
+    time,
+    code: d.hourly.weather_code[start + i],
+    tempC: d.hourly.temperature_2m[start + i],
+  }))
+
   return {
     city: place.name,
     tempC: d.current.temperature_2m,
     humidity: d.current.relative_humidity_2m,
+    feelsLikeC: d.current.apparent_temperature,
+    windKmh: d.current.wind_speed_10m,
+    uv: d.daily.uv_index_max[0],
+    sunrise: d.daily.sunrise[0],
+    sunset: d.daily.sunset[0],
     code: d.current.weather_code,
     description: label,
     maxC: d.daily.temperature_2m_max[0],
     minC: d.daily.temperature_2m_min[0],
     forecast,
+    hourly,
     fetchedAt: Date.now(),
   }
 }

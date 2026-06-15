@@ -4,6 +4,7 @@ import { AnalogClock } from './components/AnalogClock'
 import { WordClock } from './components/WordClock'
 import { FlipClock } from './components/FlipClock'
 import { Greeting } from './components/Greeting'
+import { PinnedTasks } from './components/PinnedTasks'
 import { WeatherCard } from './components/WeatherCard'
 import { FocusWidget } from './components/FocusWidget'
 import { TimerWidget } from './components/TimerWidget'
@@ -238,15 +239,16 @@ export default function App() {
   }
 
   return (
-    <div className={`app ${glass ? 'glass' : ''} ${ready ? 'ready' : ''}`}>
+    <div className={`app ${glass ? 'glass' : ''} ${ready ? 'ready' : ''} ${isLight ? 'light' : ''}`}>
       <div className="hero">
         {renderClock()}
         <Greeting name={settings.name} tagline={settings.tagline} />
+        {settings.show.pinnedTasks && <PinnedTasks todos={todos} setTodos={setTodos} />}
       </div>
 
       <div className="right-col">
         {settings.show.weather && (
-          <WeatherCard city={settings.city} units={settings.units} showForecast={settings.show.forecast} />
+          <WeatherCard city={settings.city} units={settings.units} expanded={settings.show.forecast} />
         )}
         {settings.show.focus && <FocusWidget />}
         {settings.show.timer && <TimerWidget />}

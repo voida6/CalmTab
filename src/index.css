@@ -113,6 +113,22 @@ select {
   -webkit-backdrop-filter: blur(22px) saturate(150%);
 }
 
+/* No drop shadow on glass cards — it reads as a framed box over the wallpaper. */
+.app.glass .card {
+  box-shadow: none;
+}
+
+/* Pop-up panels (incl. the apps drawer) stay mostly solid so they're readable. */
+.app.glass .panel {
+  background: color-mix(in srgb, var(--surface-container) 90%, transparent);
+}
+
+/* Light scheme over a (usually darker) wallpaper: ease the cards more
+   translucent so the bright surfaces don't feel pasted on. */
+.app.light.glass .card {
+  background: color-mix(in srgb, var(--surface-container) calc(var(--card-opacity, 70%) - 18%), transparent);
+}
+
 .app.glass .corner-btn,
 .app.glass .dock a {
   background: color-mix(in srgb, var(--surface-container) 42%, transparent);
@@ -162,6 +178,55 @@ select {
   text-shadow: var(--on-bg-shadow, none);
 }
 
+/* Pinned tasks under the greeting (over the wallpaper) */
+.pinned-tasks {
+  margin-top: 18px;
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  align-items: flex-start;
+}
+
+.app:not(.glass) .pinned-tasks {
+  align-items: center;
+}
+
+.pinned-task {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  font-size: 16px;
+  color: var(--on-bg, var(--on-surface));
+  text-shadow: var(--on-bg-shadow, none);
+}
+
+.pinned-check {
+  width: 20px;
+  height: 20px;
+  border-radius: 50%;
+  border: 2px solid currentColor;
+  display: grid;
+  place-items: center;
+  opacity: 0.7;
+  flex-shrink: 0;
+}
+
+.pinned-check svg {
+  opacity: 0;
+  transition: opacity 0.15s ease;
+}
+
+.pinned-task:hover .pinned-check {
+  opacity: 1;
+  background: var(--primary-strong);
+  border-color: var(--primary-strong);
+  color: var(--surface);
+}
+
+.pinned-task:hover .pinned-check svg {
+  opacity: 1;
+}
+
 /* ---------- Right column of cards ---------- */
 .right-col {
   position: absolute;
@@ -175,11 +240,11 @@ select {
   flex-direction: column;
   gap: 22px;
   padding: 4px;
-  scrollbar-width: thin;
+  scrollbar-width: none;
 }
 
 .right-col::-webkit-scrollbar {
-  width: 0;
+  display: none;
 }
 
 .card {
@@ -1264,40 +1329,140 @@ select {
   color: #ff6b6b;
 }
 
-/* Forecast strip */
-.forecast-strip {
+/* Weather hover-reveal (compact by default, expands on hover or when pinned) */
+.weather-expand {
+  display: grid;
+  grid-template-rows: 0fr;
+  opacity: 0;
+  transition: grid-template-rows 0.32s ease, opacity 0.26s ease;
+}
+
+.weather-card.open .weather-expand {
+  grid-template-rows: 1fr;
+  opacity: 1;
+}
+
+.wx-toggle {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  color: var(--primary);
+  font-size: 13px;
+  padding: 6px 10px;
+  border-radius: var(--radius-pill);
+}
+
+.wx-toggle:hover {
+  background: var(--surface-container-high);
+}
+
+.wx-seg {
   display: flex;
-  gap: 8px;
+  gap: 6px;
   margin-top: 14px;
 }
 
-.forecast-day {
+.wx-seg button {
   flex: 1;
+  padding: 6px;
+  border-radius: var(--radius-pill);
+  background: var(--surface-container-high);
+  color: var(--on-surface-variant);
+  font-size: 13px;
+}
+
+.wx-seg button.on {
+  background: var(--primary);
+  color: var(--surface);
+}
+
+.weather-expand-inner {
+  overflow: hidden;
+  min-height: 0;
+}
+
+.wx-stats {
+  display: grid;
+  grid-template-columns: repeat(2, 1fr);
+  gap: 6px 14px;
+  margin-top: 16px;
+}
+
+.wx-stats > div {
+  display: flex;
+  justify-content: space-between;
+  font-size: 14px;
+}
+
+.wx-k {
+  color: var(--on-surface-variant);
+}
+
+.wx-v {
+  color: var(--on-surface);
+}
+
+.wx-hourly {
+  display: flex;
+  gap: 6px;
+  margin-top: 14px;
+  overflow-x: auto;
+  padding-bottom: 2px;
+  scrollbar-width: none;
+}
+
+.wx-hourly::-webkit-scrollbar {
+  display: none;
+}
+
+.wx-hour {
+  flex: 0 0 auto;
   display: flex;
   flex-direction: column;
   align-items: center;
   gap: 4px;
-  padding: 8px 4px;
+  min-width: 48px;
+  padding: 8px 6px;
   border-radius: 14px;
   background: var(--surface-container-high);
+  color: var(--primary);
 }
 
-.app.glass .forecast-day {
+.app.glass .wx-hour {
   background: color-mix(in srgb, var(--surface-container-high) 55%, transparent);
 }
 
-.forecast-dow {
+.wx-hour-t,
+.wx-hour-temp {
   font-size: 12px;
   color: var(--on-surface-variant);
 }
 
-.forecast-ico {
-  color: var(--primary);
-  display: inline-flex;
+.wx-hour-temp {
+  color: var(--on-surface);
 }
 
-.forecast-temps {
-  font-size: 13px;
+.wx-week {
+  margin-top: 14px;
+}
+
+.wx-wrow {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  padding: 5px 2px;
+  color: var(--primary);
+}
+
+.wx-wday {
+  flex: 1;
+  font-size: 14px;
+  color: var(--on-surface);
+}
+
+.wx-wtemp {
+  font-size: 14px;
+  color: var(--on-surface);
 }
 
 /* ---------- AI Tools popover ---------- */

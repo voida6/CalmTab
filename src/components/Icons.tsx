@@ -88,6 +88,24 @@ export function GridIcon({ size = 22 }: IconProps) {
   )
 }
 
+export function ChevronIcon({ size = 16, up = false }: IconProps & { up?: boolean }) {
+  return (
+    <svg
+      width={size}
+      height={size}
+      viewBox="0 0 24 24"
+      fill="none"
+      stroke="currentColor"
+      strokeWidth="2.4"
+      strokeLinecap="round"
+      strokeLinejoin="round"
+      style={{ transform: up ? 'rotate(180deg)' : 'none', transition: 'transform 0.2s ease' }}
+    >
+      <path d="M6 9l6 6 6-6" />
+    </svg>
+  )
+}
+
 export function CheckIcon({ size = 14 }: IconProps) {
   return (
     <svg width={size} height={size} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="3" strokeLinecap="round" strokeLinejoin="round">

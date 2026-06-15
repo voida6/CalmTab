@@ -40,34 +40,41 @@ function loadImage(src: string): Promise<HTMLImageElement> {
 
 // Map a seed color's tonal palettes onto our CSS tokens for a light/dark scheme.
 async function buildFromSeed(seed: number, scheme: 'dark' | 'light'): Promise<Palette> {
-  const { themeFromSourceColor, hexFromArgb } = await import('@material/material-color-utilities')
+  const { themeFromSourceColor, hexFromArgb, TonalPalette } = await import('@material/material-color-utilities')
   const { palettes } = themeFromSourceColor(seed)
   const hx = (p: TonalPalette, tone: number) => hexFromArgb(p.tone(tone))
+  // A low-chroma palette in the wallpaper's hue: keeps a hint of colour but
+  // reads as a tinted grey rather than a vivid surface.
+  const muted = TonalPalette.fromHueAndChroma(palettes.primary.hue, 12)
+
   if (scheme === 'light') {
+    // Light surfaces (high tones) are naturally soft, so the primary palette is
+    // gentle here — light-pink / light-blue, etc.
     return {
-      '--bg': hx(palettes.neutral, 96),
-      '--surface': hx(palettes.neutral, 98),
-      '--surface-container': hx(palettes.neutral, 92),
-      '--surface-container-high': hx(palettes.neutral, 88),
-      '--primary': hx(palettes.primary, 40),
-      '--primary-strong': hx(palettes.primary, 45),
+      '--bg': hx(palettes.primary, 95),
+      '--surface': hx(palettes.primary, 97),
+      '--surface-container': hx(palettes.primary, 91),
+      '--surface-container-high': hx(palettes.primary, 87),
+      '--primary': hx(palettes.primary, 42),
+      '--primary-strong': hx(palettes.primary, 38),
       '--on-surface': hx(palettes.neutral, 12),
       '--on-surface-variant': hx(palettes.neutralVariant, 35),
       '--outline': hx(palettes.neutralVariant, 60),
-      '--track': hx(palettes.primary, 85),
+      '--track': hx(palettes.primary, 82),
     }
   }
+  // Dark surfaces use the MUTED palette (monotone, tinted grey); accent stays vivid.
   return {
-    '--bg': hx(palettes.neutral, 8),
-    '--surface': hx(palettes.neutral, 12),
-    '--surface-container': hx(palettes.neutral, 17),
-    '--surface-container-high': hx(palettes.neutral, 22),
+    '--bg': hx(muted, 8),
+    '--surface': hx(muted, 12),
+    '--surface-container': hx(muted, 16),
+    '--surface-container-high': hx(muted, 22),
     '--primary': hx(palettes.primary, 82),
-    '--primary-strong': hx(palettes.primary, 70),
+    '--primary-strong': hx(palettes.primary, 72),
     '--on-surface': hx(palettes.neutral, 92),
     '--on-surface-variant': hx(palettes.neutralVariant, 80),
     '--outline': hx(palettes.neutralVariant, 45),
-    '--track': hx(palettes.primary, 32),
+    '--track': hx(muted, 30),
   }
 }
 
@@ -89,7 +96,7 @@ export interface ImageAnalysis {
 
 // Analyze a wallpaper: brightness behind the hero text + candidate accent colors.
 export async function analyzeImage(dataUrl: string): Promise<ImageAnalysis> {
-  const { QuantizerCelebi, Score, hexFromArgb, argbFromRgb, themeFromSourceColor } = await import(
+  const { QuantizerCelebi, Score, Hct, hexFromArgb, argbFromRgb, themeFromSourceColor } = await import(
     '@material/material-color-utilities'
   )
   const img = await loadImage(dataUrl)
@@ -126,11 +133,23 @@ export async function analyzeImage(dataUrl: string): Promise<ImageAnalysis> {
   let swatches: Swatch[] = []
   let seed = '#7c7c8a'
   try {
-    const ranked = Score.score(QuantizerCelebi.quantize(pixels, 96))
-    swatches = ranked.slice(0, 6).map((argb) => ({
+    const quantized = QuantizerCelebi.quantize(pixels, 128)
+    // Rank by DOMINANCE (how much of the image a color covers) with a mild
+    // chroma weight — so the wallpaper's main colour wins over a small vivid
+    // accent. Skip near-grey and near black/white.
+    const cands = [...quantized.entries()]
+      .map(([argb, pop]) => {
+        const h = Hct.fromInt(argb)
+        return { argb, score: pop * (h.chroma + 16), chroma: h.chroma, tone: h.tone }
+      })
+      .filter((c) => c.chroma >= 10 && c.tone >= 12 && c.tone <= 92)
+      .sort((a, b) => b.score - a.score)
+    let chosen = cands.slice(0, 6).map((c) => c.argb)
+    // Fallback for low-colour (greyscale-ish) images.
+    if (chosen.length === 0) chosen = Score.score(quantized).slice(0, 6)
+    swatches = chosen.map((argb) => ({
       seed: hexFromArgb(argb),
-      // Preview the accent Material You will actually produce (tone 60), so the
-      // dot color matches the theme instead of the raw (often muted) pixel.
+      // Preview the accent Material You actually produces (tone 60).
       color: hexFromArgb(themeFromSourceColor(argb).palettes.primary.tone(60)),
     }))
     seed = swatches[0]?.seed ?? seed

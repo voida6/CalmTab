@@ -48,7 +48,8 @@ export interface TodoItem {
 
 export interface WidgetToggles {
   weather: boolean
-  forecast: boolean // 3-day strip on the weather card
+  forecast: boolean // start the weather details expanded
+  pinnedTasks: boolean // show pending tasks under the greeting
   focus: boolean
   timer: boolean // Pomodoro focus timer
   quickTimer: boolean // editable countdown timer
@@ -122,6 +123,7 @@ export const DEFAULT_SETTINGS: Settings = {
   show: {
     weather: true,
     forecast: false,
+    pinnedTasks: false,
     focus: true,
     timer: false,
     quickTimer: false,
