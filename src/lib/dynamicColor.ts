@@ -78,9 +78,50 @@ async function buildFromSeed(seed: number, scheme: 'dark' | 'light'): Promise<Pa
   }
 }
 
-export async function paletteFromHex(hex: string, scheme: 'dark' | 'light'): Promise<Palette> {
+// Palette personality. 'calm' is CalmTab's hand-tuned default; the rest map
+// Google's Material Dynamic Color scheme variants onto our tokens.
+export type PaletteStyle = 'calm' | 'tonal' | 'vibrant' | 'expressive' | 'neutral' | 'fidelity' | 'mono'
+
+async function buildFromScheme(
+  seed: number,
+  scheme: 'dark' | 'light',
+  style: Exclude<PaletteStyle, 'calm'>,
+): Promise<Palette> {
+  const m = await import('@material/material-color-utilities')
+  const { Hct, MaterialDynamicColors, hexFromArgb } = m
+  const ctors = {
+    tonal: m.SchemeTonalSpot,
+    vibrant: m.SchemeVibrant,
+    expressive: m.SchemeExpressive,
+    neutral: m.SchemeNeutral,
+    fidelity: m.SchemeFidelity,
+    mono: m.SchemeMonochrome,
+  } as const
+  const isDark = scheme === 'dark'
+  const ds = new ctors[style](Hct.fromInt(seed), isDark, 0)
+  const c = (dc: { getArgb: (s: typeof ds) => number }) => hexFromArgb(dc.getArgb(ds))
+  return {
+    '--bg': c(MaterialDynamicColors.background),
+    '--surface': c(MaterialDynamicColors.surfaceContainerLow),
+    '--surface-container': c(MaterialDynamicColors.surfaceContainer),
+    '--surface-container-high': c(MaterialDynamicColors.surfaceContainerHigh),
+    '--primary': c(MaterialDynamicColors.primary),
+    '--primary-strong': hexFromArgb(ds.primaryPalette.tone(isDark ? 70 : 35)),
+    '--on-surface': c(MaterialDynamicColors.onSurface),
+    '--on-surface-variant': c(MaterialDynamicColors.onSurfaceVariant),
+    '--outline': c(MaterialDynamicColors.outline),
+    '--track': c(MaterialDynamicColors.surfaceVariant),
+  }
+}
+
+export async function paletteFromHex(
+  hex: string,
+  scheme: 'dark' | 'light',
+  style: PaletteStyle = 'calm',
+): Promise<Palette> {
   const { argbFromHex } = await import('@material/material-color-utilities')
-  return buildFromSeed(argbFromHex(hex), scheme)
+  if (style === 'calm') return buildFromSeed(argbFromHex(hex), scheme)
+  return buildFromScheme(argbFromHex(hex), scheme, style)
 }
 
 export interface Swatch {

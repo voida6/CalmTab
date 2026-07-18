@@ -5,3 +5,4 @@ dist/
 .vite/
 *.zip
 release_tmp/
+# marker

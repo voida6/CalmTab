@@ -3,6 +3,9 @@
   "name": "CalmTab",
   "version": "0.5.0",
   "description": "A calm, customizable Material You new-tab dashboard.",
+  "browser_specific_settings": {
+    "gecko": { "id": "calmtab@voida6.github.io", "strict_min_version": "128.0" }
+  },
   "chrome_url_overrides": { "newtab": "index.html" },
   "permissions": ["storage", "unlimitedStorage", "geolocation"],
   "host_permissions": [

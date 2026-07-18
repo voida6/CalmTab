@@ -16,6 +16,8 @@ export interface HourForecast {
 
 export interface Weather {
   city: string
+  lat: number // kept so refreshes can skip the geocoding call
+  lon: number
   tempC: number
   minC: number
   maxC: number
@@ -80,9 +82,14 @@ async function geocode(city: string): Promise<GeocodeResult | null> {
 export async function fetchWeather(city: string): Promise<Weather | null> {
   const place = await geocode(city)
   if (!place) return null
+  return fetchWeatherAt(place.latitude, place.longitude, place.name)
+}
+
+// Fetch by coordinates directly (geolocation mode, or a cached geocode).
+export async function fetchWeatherAt(lat: number, lon: number, label: string): Promise<Weather | null> {
   const url =
-    `https://api.open-meteo.com/v1/forecast?latitude=${place.latitude}` +
-    `&longitude=${place.longitude}` +
+    `https://api.open-meteo.com/v1/forecast?latitude=${lat}` +
+    `&longitude=${lon}` +
     '&current=temperature_2m,relative_humidity_2m,apparent_temperature,weather_code,wind_speed_10m' +
     '&hourly=temperature_2m,weather_code' +
     '&daily=weather_code,temperature_2m_max,temperature_2m_min,sunrise,sunset,uv_index_max' +
@@ -108,7 +115,7 @@ export async function fetchWeather(city: string): Promise<Weather | null> {
       uv_index_max: number[]
     }
   }
-  const { label } = describeCode(d.current.weather_code)
+  const { label: codeLabel } = describeCode(d.current.weather_code)
 
   // 7-day outlook (today + next 6).
   const forecast: DayForecast[] = d.daily.time.slice(0, 7).map((date, i) => ({
@@ -129,7 +136,9 @@ export async function fetchWeather(city: string): Promise<Weather | null> {
   }))
 
   return {
-    city: place.name,
+    city: label,
+    lat,
+    lon,
     tempC: d.current.temperature_2m,
     humidity: d.current.relative_humidity_2m,
     feelsLikeC: d.current.apparent_temperature,
@@ -138,7 +147,7 @@ export async function fetchWeather(city: string): Promise<Weather | null> {
     sunrise: d.daily.sunrise[0],
     sunset: d.daily.sunset[0],
     code: d.current.weather_code,
-    description: label,
+    description: codeLabel,
     maxC: d.daily.temperature_2m_max[0],
     minC: d.daily.temperature_2m_min[0],
     forecast,

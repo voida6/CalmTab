@@ -21,7 +21,10 @@
     if (b.onBgShadow) s.setProperty('--on-bg-shadow', b.onBgShadow)
     if (b.dataUrl) {
       s.setProperty('--wp-image', 'url(' + b.dataUrl + ')')
-      s.setProperty('--wp-blur', (b.blur || 0) + 'px')
+      // The cached image is a tiny thumbnail; extra blur hides the upscaling
+      // until React swaps in the full wallpaper and restores the real blur.
+      var blur = b.isThumb ? Math.max(b.blur || 0, 14) : b.blur || 0
+      s.setProperty('--wp-blur', blur + 'px')
       s.setProperty('--wp-dim', String((b.dim || 0) / 100))
       s.setProperty('--wp-on', '1')
     }

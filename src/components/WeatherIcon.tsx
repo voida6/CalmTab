@@ -23,6 +23,7 @@ const CLOUD_UP = 'M20 16.58A5 5 0 0 0 18 7h-1.26A8 8 0 1 0 4 15.25'
 
 export function WeatherIcon({ code, size = 40 }: Props) {
   const kind = kindFor(code)
+  const animClass = kind === 'sun' ? 'wx-anim-sun' : kind === 'partly' ? 'wx-anim-partly' : 'wx-anim-cloud'
   const p = {
     width: size,
     height: size,
@@ -32,6 +33,7 @@ export function WeatherIcon({ code, size = 40 }: Props) {
     strokeWidth: 1.7,
     strokeLinecap: 'round' as const,
     strokeLinejoin: 'round' as const,
+    className: animClass,
   }
 
   switch (kind) {

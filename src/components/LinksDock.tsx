@@ -11,8 +11,18 @@ export function LinksDock({ links, iconStyle }: Props) {
   return (
     <nav className="dock">
       {links.map((l) => (
-        <a key={l.id} href={l.url} data-label={l.name} aria-label={l.name}>
-          <ShortcutIcon url={l.url} name={l.name} style={iconStyle} />
+        <a
+          key={l.id}
+          href={l.url}
+          data-label={l.name}
+          aria-label={l.name}
+          style={l.color ? { color: l.color } : undefined}
+        >
+          {l.icon ? (
+            <span className="dock-emoji">{l.icon}</span>
+          ) : (
+            <ShortcutIcon url={l.url} name={l.name} style={iconStyle} />
+          )}
         </a>
       ))}
     </nav>

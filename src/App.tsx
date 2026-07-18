@@ -1,4 +1,5 @@
-import { useEffect, useMemo, useState } from 'react'
+import { useEffect, useMemo, useRef, useState } from 'react'
+import { createPortal } from 'react-dom'
 import { Clock } from './components/Clock'
 import { AnalogClock } from './components/AnalogClock'
 import { WordClock } from './components/WordClock'
@@ -26,6 +27,7 @@ import {
   DEFAULT_LINKS,
   DEFAULT_SETTINGS,
   DEFAULT_WALLPAPER,
+  DEFAULT_WIDGET_ORDER,
   LIGHT_THEMES,
   THEME_PAIR,
   type LinkItem,
@@ -34,6 +36,9 @@ import {
   type WallpaperState,
 } from './lib/types'
 import { analyzeImage, paletteFromHex, PALETTE_TOKENS } from './lib/dynamicColor'
+import { thumbFromDataUrl } from './lib/image'
+import { getItem } from './lib/storage'
+import { NotesWidget } from './components/NotesWidget'
 
 type Panel = 'none' | 'todo' | 'settings' | 'apps' | 'ai'
 
@@ -42,8 +47,12 @@ export default function App() {
   const [todos, setTodos] = useStoredState<TodoItem[]>('todos', [])
   const [links, setLinks] = useStoredState<LinkItem[]>('links', DEFAULT_LINKS)
   const [wallpaper, setWallpaper] = useStoredState<WallpaperState>('wallpaper', DEFAULT_WALLPAPER)
+  const [widgetOrder, setWidgetOrder] = useStoredState<string[]>('widgetOrder', DEFAULT_WIDGET_ORDER)
   const [panel, setPanel] = useState<Panel>('none')
   const [ready, setReady] = useState(false)
+  const [idle, setIdle] = useState(false)
+  const [dragOver, setDragOver] = useState(-1)
+  const dragSrc = useRef(-1)
 
   useEffect(() => {
     const id = requestAnimationFrame(() => requestAnimationFrame(() => setReady(true)))
@@ -61,6 +70,27 @@ export default function App() {
   )
 
   const hasWallpaper = !!wallpaper.dataUrl
+
+  // Animated wallpapers: load the stored media Blob and expose an object URL.
+  const [mediaUrl, setMediaUrl] = useState('')
+  useEffect(() => {
+    if (wallpaper.kind === 'image' || !wallpaper.mediaId) {
+      setMediaUrl('')
+      return
+    }
+    let active = true
+    let url = ''
+    getItem<Blob | null>('wallpaperMedia', null).then((blob) => {
+      if (!active || !blob) return
+      url = URL.createObjectURL(blob)
+      setMediaUrl(url)
+    })
+    return () => {
+      active = false
+      if (url) URL.revokeObjectURL(url)
+      setMediaUrl('')
+    }
+  }, [wallpaper.kind, wallpaper.mediaId])
   const useAuto = settings.colorMode === 'auto' && hasWallpaper && !!wallpaper.palette
   const accentSeed = settings.accentMode === 'custom' ? settings.accentColor : wallpaper.seed
 
@@ -92,16 +122,32 @@ export default function App() {
     }
   }, [wallpaper.dataUrl])
 
+  // 1b) Keep a tiny thumbnail alongside the wallpaper. boot.js paints it
+  // (blurred) on the very first frame; the full image would overflow the
+  // localStorage boot cache. Also covers wallpapers saved by older versions.
+  useEffect(() => {
+    if (!hasWallpaper || wallpaper.thumb) return
+    let active = true
+    thumbFromDataUrl(wallpaper.dataUrl)
+      .then((thumb) => {
+        if (active) setWallpaper((w) => (w.dataUrl === wallpaper.dataUrl ? { ...w, thumb } : w))
+      })
+      .catch(() => undefined)
+    return () => {
+      active = false
+    }
+  }, [hasWallpaper, wallpaper.dataUrl, wallpaper.thumb])
+
   // 2) Build the palette from the chosen seed (image's or a custom color) for the
   // current light/dark scheme. Cached via a signature of those inputs.
   useEffect(() => {
     if (!hasWallpaper) return
     if (settings.accentMode === 'auto' && !wallpaper.seed) return // wait for analysis
     const seed = accentSeed || '#7c6bdc'
-    const sig = `${settings.colorScheme}:${settings.accentMode}:${seed}`
+    const sig = `${settings.colorScheme}:${settings.accentMode}:${seed}:${settings.paletteStyle}`
     if (wallpaper.sig === sig && wallpaper.palette) return
     let active = true
-    paletteFromHex(seed, settings.colorScheme)
+    paletteFromHex(seed, settings.colorScheme, settings.paletteStyle)
       .then((palette) => {
         if (active) setWallpaper((w) => ({ ...w, palette, sig }))
       })
@@ -109,7 +155,7 @@ export default function App() {
     return () => {
       active = false
     }
-  }, [hasWallpaper, accentSeed, wallpaper.seed, settings.colorScheme, settings.accentMode])
+  }, [hasWallpaper, accentSeed, wallpaper.seed, settings.colorScheme, settings.accentMode, settings.paletteStyle])
 
   // Hero text contrast: pick light/dark text for clock/greeting based on how
   // bright the wallpaper is behind them (accounting for the dim overlay).
@@ -150,7 +196,10 @@ export default function App() {
     s.setProperty('--fade', `${settings.background.fade}ms`)
     s.setProperty('--card-opacity', `${settings.background.cardOpacity}%`)
     if (hasWallpaper) {
-      s.setProperty('--wp-image', `url(${wallpaper.dataUrl})`)
+      // GIFs animate straight from CSS background-image; videos keep the still
+      // frame here as a backdrop while the <video> element loads on top.
+      const bgSrc = wallpaper.kind === 'gif' && mediaUrl ? mediaUrl : wallpaper.dataUrl
+      s.setProperty('--wp-image', `url(${bgSrc})`)
       s.setProperty('--wp-blur', `${settings.background.blur}px`)
       s.setProperty('--wp-dim', String(settings.background.dim / 100))
       s.setProperty('--wp-on', '1')
@@ -161,6 +210,8 @@ export default function App() {
   }, [
     hasWallpaper,
     wallpaper.dataUrl,
+    wallpaper.kind,
+    mediaUrl,
     settings.background.blur,
     settings.background.dim,
     settings.background.fade,
@@ -175,7 +226,10 @@ export default function App() {
       useAuto,
       theme: settings.theme,
       vars: useAuto ? wallpaper.palette : null,
-      dataUrl: wallpaper.dataUrl,
+      // Tiny thumbnail, not the full image: keeps the boot cache well under
+      // the localStorage quota no matter the wallpaper size.
+      dataUrl: wallpaper.thumb,
+      isThumb: true,
       blur: settings.background.blur,
       dim: settings.background.dim,
       fade: settings.background.fade,
@@ -197,7 +251,7 @@ export default function App() {
     hasWallpaper,
     settings.theme,
     wallpaper.palette,
-    wallpaper.dataUrl,
+    wallpaper.thumb,
     wallpaper.luminance,
     settings.background.blur,
     settings.background.dim,
@@ -205,9 +259,75 @@ export default function App() {
     settings.background.cardOpacity,
   ])
 
+  // Widgets added in newer versions won't be in a stored order — append them.
+  const fullWidgetOrder = useMemo(
+    () => [...widgetOrder, ...DEFAULT_WIDGET_ORDER.filter((k) => !widgetOrder.includes(k))],
+    [widgetOrder],
+  )
+
+  // Ambient screensaver: after 1 min without input, dim everything but the
+  // hero (clock + greeting), which drifts slowly. Any input wakes it.
+  useEffect(() => {
+    if (!settings.ambient) {
+      setIdle(false)
+      return
+    }
+    let t = 0
+    const arm = () => {
+      setIdle(false)
+      window.clearTimeout(t)
+      t = window.setTimeout(() => setIdle(true), 60_000)
+    }
+    const evs = ['mousemove', 'mousedown', 'keydown', 'wheel', 'touchstart'] as const
+    for (const e of evs) window.addEventListener(e, arm, { passive: true })
+    arm()
+    return () => {
+      window.clearTimeout(t)
+      for (const e of evs) window.removeEventListener(e, arm)
+    }
+  }, [settings.ambient])
+
   const openTodos = todos.filter((t) => !t.done).length
   const glass = settings.background.glass && hasWallpaper
   const close = () => setPanel('none')
+
+  useEffect(() => {
+    const apply = () => {
+      const h = new Date().getHours()
+      const s = document.documentElement.style
+      if (h >= 5 && h < 8) {
+        s.setProperty('--tod-color', '#ff9a45')
+        s.setProperty('--tod-opacity', String(0.06 + (7 - h) * 0.015))
+      } else if (h >= 17 && h < 20) {
+        s.setProperty('--tod-color', '#ff5e35')
+        s.setProperty('--tod-opacity', String(0.04 + (h - 17) * 0.02))
+      } else if (h < 5 || h >= 20) {
+        s.setProperty('--tod-color', '#1a2d50')
+        s.setProperty('--tod-opacity', '0.07')
+      } else {
+        s.setProperty('--tod-opacity', '0')
+      }
+    }
+    apply()
+    const id = setInterval(apply, 60_000)
+    return () => clearInterval(id)
+  }, [])
+
+  useEffect(() => {
+    const handler = (e: KeyboardEvent) => {
+      const meta = e.metaKey || e.ctrlKey
+      const tag = (document.activeElement as HTMLElement)?.tagName
+      const typing = tag === 'INPUT' || tag === 'TEXTAREA' || tag === 'SELECT'
+      if (e.key === 'Escape') { setPanel('none'); return }
+      if (meta && e.key === 'k') { e.preventDefault(); setPanel((p) => (p === 'ai' ? 'none' : 'ai')); return }
+      if (meta && e.key === ',') { e.preventDefault(); setPanel((p) => (p === 'settings' ? 'none' : 'settings')); return }
+      if (e.key === 't' && !meta && !e.altKey && !typing) {
+        window.dispatchEvent(new Event('calmtab:focus-timer'))
+      }
+    }
+    window.addEventListener('keydown', handler)
+    return () => window.removeEventListener('keydown', handler)
+  }, [])
 
   const renderClock = () => {
     switch (settings.clockStyle) {
@@ -226,6 +346,21 @@ export default function App() {
     }
   }
 
+  const renderWidget = (key: string) => {
+    switch (key) {
+      case 'weather': return settings.show.weather ? <WeatherCard city={settings.city} units={settings.units} source={settings.weatherSource} expanded={settings.show.forecast} /> : null
+      case 'focus':   return settings.show.focus   ? <FocusWidget /> : null
+      case 'timer':   return settings.show.timer   ? <TimerWidget /> : null
+      case 'habits':  return settings.show.habits  ? <HabitsWidget /> : null
+      case 'quickTimer': return settings.show.quickTimer ? <QuickTimerWidget /> : null
+      case 'ticker':  return settings.show.ticker  ? <TickerWidget symbols={settings.tickerSymbols} /> : null
+      case 'search':  return settings.show.search  ? <SearchBar /> : null
+      case 'quote':   return settings.show.quote   ? <QuoteCard /> : null
+      case 'notes':   return settings.show.notes   ? <NotesWidget /> : null
+      default: return null
+    }
+  }
+
   // Light/dark quick toggle. With a wallpaper in auto mode it flips the palette
   // tones; otherwise it swaps the manual theme to its paired light/dark variant.
   const effectiveAuto = settings.colorMode === 'auto' && hasWallpaper
@@ -239,7 +374,7 @@ export default function App() {
   }
 
   return (
-    <div className={`app ${glass ? 'glass' : ''} ${ready ? 'ready' : ''} ${isLight ? 'light' : ''}`}>
+    <div className={`app ${glass ? 'glass' : ''} ${ready ? 'ready' : ''} ${isLight ? 'light' : ''} ${settings.compactWidgets ? 'compact' : ''} ${idle && panel === 'none' ? 'ambient' : ''}`}>
       <div className="hero">
         {renderClock()}
         <Greeting name={settings.name} tagline={settings.tagline} />
@@ -247,16 +382,33 @@ export default function App() {
       </div>
 
       <div className="right-col">
-        {settings.show.weather && (
-          <WeatherCard city={settings.city} units={settings.units} expanded={settings.show.forecast} />
-        )}
-        {settings.show.focus && <FocusWidget />}
-        {settings.show.timer && <TimerWidget />}
-        {settings.show.habits && <HabitsWidget />}
-        {settings.show.quickTimer && <QuickTimerWidget />}
-        {settings.show.ticker && <TickerWidget symbols={settings.tickerSymbols} />}
-        {settings.show.search && <SearchBar />}
-        {settings.show.quote && <QuoteCard />}
+        {fullWidgetOrder.map((key, i) => {
+          const content = renderWidget(key)
+          if (!content) return null
+          return (
+            <div
+              key={key}
+              className={`widget-slot${dragOver === i ? ' drag-over' : ''}`}
+              draggable
+              onDragStart={() => { dragSrc.current = i }}
+              onDragOver={(e) => { e.preventDefault(); setDragOver(i) }}
+              onDragLeave={() => setDragOver(-1)}
+              onDrop={() => {
+                if (dragSrc.current !== i) {
+                  // Reorder the merged list (stored order may lack newer widgets).
+                  const next = [...fullWidgetOrder]
+                  const [moved] = next.splice(dragSrc.current, 1)
+                  next.splice(i, 0, moved)
+                  setWidgetOrder(() => next)
+                }
+                setDragOver(-1)
+              }}
+              onDragEnd={() => setDragOver(-1)}
+            >
+              {content}
+            </div>
+          )
+        })}
       </div>
 
       {settings.show.dock && <LinksDock links={links} iconStyle={settings.iconStyle} />}
@@ -313,6 +465,12 @@ export default function App() {
       >
         <GearIcon />
       </button>
+
+      {wallpaper.kind === 'video' && mediaUrl &&
+        createPortal(
+          <video className="bg-video" src={mediaUrl} autoPlay loop muted playsInline />,
+          document.body,
+        )}
 
       {panel === 'ai' && <AiToolsMenu iconStyle={settings.iconStyle} onClose={close} />}
       {panel === 'todo' && <TodoPanel todos={todos} setTodos={setTodos} onClose={close} />}

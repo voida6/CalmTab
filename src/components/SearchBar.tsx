@@ -1,4 +1,5 @@
 import { useRef, useState } from 'react'
+import { useStoredState } from '../hooks/useStoredState'
 import { MicIcon } from './Icons'
 
 interface Engine {
@@ -25,7 +26,7 @@ type SpeechRecognitionLike = {
 }
 
 export function SearchBar() {
-  const [engineId, setEngineId] = useState('google')
+  const [engineId, setEngineId] = useStoredState<string>('searchEngine', 'google')
   const [query, setQuery] = useState('')
   const [listening, setListening] = useState(false)
   const recogRef = useRef<SpeechRecognitionLike | null>(null)

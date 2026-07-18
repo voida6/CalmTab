@@ -72,8 +72,24 @@ select {
     transition: none;
   }
   .bg-image,
+  .bg-video,
   .bg-dim {
     transition: none;
+  }
+  .widget-slot {
+    animation: none;
+    animation-delay: 0s;
+  }
+  .widget-slot:hover > .card {
+    transform: none;
+  }
+  .app.ambient .hero {
+    animation: none;
+  }
+  .wx-anim-sun,
+  .wx-anim-cloud,
+  .wx-anim-partly {
+    animation: none;
   }
 }
 
@@ -95,6 +111,19 @@ select {
   transition: opacity 0.3s ease, filter 0.25s ease;
 }
 
+.bg-video {
+  position: fixed;
+  inset: -60px;
+  width: calc(100% + 120px);
+  height: calc(100% + 120px);
+  object-fit: cover;
+  filter: blur(var(--wp-blur, 0px));
+  transform: scale(1.06);
+  opacity: var(--wp-on, 0);
+  z-index: -2;
+  transition: opacity 0.3s ease, filter 0.25s ease;
+}
+
 .bg-dim {
   position: fixed;
   inset: 0;
@@ -103,6 +132,17 @@ select {
   z-index: -1;
   pointer-events: none;
   transition: opacity 0.3s ease;
+}
+
+.bg-tint {
+  position: fixed;
+  inset: 0;
+  background-color: var(--tod-color, transparent);
+  opacity: calc(var(--wp-on, 0) * var(--tod-opacity, 0));
+  z-index: -1;
+  pointer-events: none;
+  transition: background-color 90s ease, opacity 90s ease;
+  mix-blend-mode: screen;
 }
 
 /* ---------- Frosted glass (when a wallpaper is set) ---------- */
@@ -116,6 +156,7 @@ select {
 /* No drop shadow on glass cards — it reads as a framed box over the wallpaper. */
 .app.glass .card {
   box-shadow: none;
+  border: 1px solid color-mix(in srgb, var(--on-surface) 14%, transparent);
 }
 
 /* Pop-up panels (incl. the apps drawer) stay mostly solid so they're readable. */
@@ -156,7 +197,9 @@ select {
   letter-spacing: -1px;
   color: var(--primary-strong);
   font-variant-numeric: tabular-nums;
-  text-shadow: var(--on-bg-shadow, none);
+  text-shadow: var(--on-bg-shadow, 0 0 0 transparent),
+    0 0 50px color-mix(in srgb, var(--primary-strong) 22%, transparent),
+    0 0 110px color-mix(in srgb, var(--primary-strong) 10%, transparent);
 }
 
 .greeting {
@@ -230,14 +273,14 @@ select {
 /* ---------- Right column of cards ---------- */
 .right-col {
   position: absolute;
-  top: 50%;
+  top: 92px; /* clear the top-right controls (apps / appearance toggle) */
+  bottom: 24px;
   right: clamp(40px, 6vw, 120px);
-  transform: translateY(-50%);
   width: clamp(360px, 34vw, 480px);
-  max-height: 92vh;
   overflow-y: auto;
   display: flex;
   flex-direction: column;
+  justify-content: safe center;
   gap: 22px;
   padding: 4px;
   scrollbar-width: none;
@@ -247,8 +290,69 @@ select {
   display: none;
 }
 
+.widget-slot {
+  cursor: grab;
+  position: relative;
+  animation: widget-enter 0.42s cubic-bezier(0.16, 1, 0.3, 1) both;
+  will-change: transform, opacity;
+}
+
+/* Staggered entrance, top to bottom. */
+.widget-slot:nth-child(1) { animation-delay: 0.02s; }
+.widget-slot:nth-child(2) { animation-delay: 0.07s; }
+.widget-slot:nth-child(3) { animation-delay: 0.12s; }
+.widget-slot:nth-child(4) { animation-delay: 0.17s; }
+.widget-slot:nth-child(5) { animation-delay: 0.22s; }
+.widget-slot:nth-child(6) { animation-delay: 0.27s; }
+.widget-slot:nth-child(7) { animation-delay: 0.32s; }
+.widget-slot:nth-child(n + 8) { animation-delay: 0.37s; }
+
+/* Drag-handle hint (2x3 dot grip) that appears on hover. */
+.widget-slot::before {
+  content: '';
+  position: absolute;
+  top: 12px;
+  right: 12px;
+  width: 10px;
+  height: 15px;
+  background-image: radial-gradient(circle, var(--on-surface-variant) 1.4px, transparent 1.8px);
+  background-size: 5px 5px;
+  opacity: 0;
+  transition: opacity 0.18s ease;
+  pointer-events: none;
+  z-index: 1;
+}
+
+.widget-slot:hover::before {
+  opacity: 0.5;
+}
+
+/* Gentle lift on hover. */
+.widget-slot > .card {
+  transition: transform 0.18s ease, box-shadow 0.18s ease,
+    background-color 0.25s ease, border-color 0.25s ease;
+}
+
+.widget-slot:hover > .card {
+  transform: translateY(-2px);
+  box-shadow: 0 12px 30px rgba(0, 0, 0, 0.16);
+}
+
+.widget-slot:active {
+  cursor: grabbing;
+}
+
+.widget-slot.drag-over {
+  outline: 2px solid var(--accent);
+  outline-offset: 3px;
+  border-radius: var(--radius-card);
+}
+
 .card {
-  background: var(--surface-container);
+  background: color-mix(in srgb, var(--surface-container) 90%, transparent);
+  backdrop-filter: blur(10px) saturate(1.25);
+  -webkit-backdrop-filter: blur(10px) saturate(1.25);
+  border: 1px solid color-mix(in srgb, var(--on-surface) 7%, transparent);
   border-radius: var(--radius-card);
   box-shadow: var(--shadow-card);
   padding: 24px 28px;
@@ -667,10 +771,23 @@ select {
   z-index: 11;
   padding: 22px;
   overflow-y: auto;
+  scrollbar-width: none;
   display: flex;
   flex-direction: column;
   gap: 16px;
   animation: pop-in 0.18s ease-out both;
+}
+
+.panel::-webkit-scrollbar {
+  display: none;
+}
+
+.app.compact .card {
+  padding: 14px 18px;
+}
+
+.app.compact .right-col {
+  gap: 12px;
 }
 
 .anchor-tl {
@@ -801,6 +918,363 @@ select {
   padding: 0;
 }
 
+/* ---------- Settings: tabs, segments, pickers ---------- */
+.settings-panel {
+  width: min(380px, 94vw);
+}
+
+.tab-bar {
+  display: flex;
+  gap: 4px;
+  padding: 4px;
+  background: var(--surface-container);
+  border-radius: 999px;
+}
+
+.tab-btn {
+  flex: 1;
+  border: none;
+  background: transparent;
+  color: var(--on-surface-variant);
+  font: inherit;
+  font-size: 12.5px;
+  font-weight: 600;
+  padding: 7px 2px;
+  border-radius: 999px;
+  cursor: pointer;
+  transition: background-color 0.18s ease, color 0.18s ease;
+}
+
+.tab-btn.on {
+  background: var(--primary);
+  color: var(--bg);
+}
+
+.tab-btn:not(.on):hover {
+  color: var(--on-surface);
+}
+
+.seg-row {
+  display: flex;
+  gap: 6px;
+}
+
+.seg-row.wrap {
+  flex-wrap: wrap;
+}
+
+.seg-btn {
+  flex: 1;
+  min-width: 72px;
+  border: 1px solid var(--outline);
+  background: transparent;
+  color: var(--on-surface-variant);
+  font: inherit;
+  font-size: 13px;
+  padding: 8px 10px;
+  border-radius: var(--radius-btn, 12px);
+  cursor: pointer;
+  transition: background-color 0.18s ease, color 0.18s ease, border-color 0.18s ease;
+}
+
+.seg-btn.on {
+  background: var(--primary);
+  border-color: var(--primary);
+  color: var(--bg);
+  font-weight: 700;
+}
+
+.seg-btn:not(.on):hover {
+  background: var(--surface-container-high);
+  color: var(--on-surface);
+}
+
+.theme-grid {
+  display: grid;
+  grid-template-columns: repeat(3, 1fr);
+  gap: 8px;
+}
+
+.theme-chip {
+  border: 2px solid var(--outline);
+  border-radius: var(--radius-btn, 12px);
+  cursor: pointer;
+  padding: 10px 8px 8px;
+  display: flex;
+  flex-direction: column;
+  align-items: flex-start;
+  gap: 6px;
+  transition: border-color 0.18s ease, transform 0.12s ease;
+}
+
+.theme-chip:hover {
+  transform: translateY(-1px);
+}
+
+.theme-chip.active {
+  border-color: var(--primary);
+  box-shadow: 0 0 0 2px color-mix(in srgb, var(--primary) 35%, transparent);
+}
+
+.theme-dot {
+  width: 16px;
+  height: 16px;
+  border-radius: 50%;
+}
+
+.theme-name {
+  font-size: 11px;
+  font-weight: 700;
+  line-height: 1.15;
+  text-align: left;
+}
+
+.wp-preview {
+  height: 96px;
+  border-radius: var(--radius-btn, 12px);
+  background-size: cover;
+  background-position: center;
+  border: 1px solid var(--outline);
+  position: relative;
+  overflow: hidden;
+}
+
+.wp-badge {
+  position: absolute;
+  top: 8px;
+  right: 8px;
+  font-size: 10.5px;
+  font-weight: 800;
+  letter-spacing: 0.04em;
+  padding: 3px 8px;
+  border-radius: 999px;
+  background: rgba(0, 0, 0, 0.55);
+  color: #fff;
+}
+
+.gallery-grid {
+  display: grid;
+  grid-template-columns: repeat(4, 1fr);
+  gap: 8px;
+}
+
+.gallery-chip {
+  height: 52px;
+  border-radius: var(--radius-btn, 12px);
+  border: 1px solid var(--outline);
+  cursor: pointer;
+  transition: transform 0.12s ease, box-shadow 0.12s ease;
+}
+
+.gallery-chip:hover {
+  transform: scale(1.04);
+  box-shadow: 0 4px 14px rgba(0, 0, 0, 0.25);
+}
+
+.field-error {
+  font-size: 12.5px;
+  color: #e5484d;
+  font-weight: 600;
+}
+
+.seg-btn.small {
+  min-width: 0;
+  flex: 0 1 auto;
+  font-size: 12px;
+  padding: 6px 11px;
+}
+
+.about-row {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  padding: 5px 0;
+  font-size: 13.5px;
+  color: var(--on-surface-variant);
+}
+
+.about-row kbd {
+  font: 600 11.5px/1 inherit;
+  font-family: inherit;
+  color: var(--on-surface);
+  background: var(--surface-container-high);
+  border: 1px solid var(--outline);
+  border-bottom-width: 2px;
+  border-radius: 6px;
+  padding: 3px 7px;
+}
+
+.btn-ghost.danger {
+  color: #e5484d;
+  align-self: flex-start;
+}
+
+.about-foot {
+  padding-top: 4px;
+  border-top: 1px solid color-mix(in srgb, var(--outline) 40%, transparent);
+  font-size: 12.5px;
+}
+
+.wx-curve {
+  width: 100%;
+  color: var(--primary);
+  margin-top: 2px;
+}
+
+.wx-line {
+  fill: none;
+  stroke: currentColor;
+  stroke-width: 2.2;
+  stroke-linecap: round;
+}
+
+.wx-dot {
+  fill: currentColor;
+}
+
+.wx-tval {
+  fill: var(--on-surface);
+  font-size: 10px;
+  font-weight: 700;
+  text-anchor: middle;
+}
+
+.wx-tlab {
+  fill: var(--on-surface-variant);
+  font-size: 9px;
+  text-anchor: middle;
+}
+
+/* Clock style previews */
+.clock-grid {
+  display: grid;
+  grid-template-columns: repeat(2, 1fr);
+  gap: 8px;
+}
+
+.clock-chip {
+  border: 2px solid var(--outline);
+  border-radius: var(--radius-btn, 12px);
+  background: var(--surface-container);
+  cursor: pointer;
+  padding: 6px 6px 8px;
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  align-items: center;
+  overflow: hidden;
+  transition: border-color 0.18s ease;
+}
+
+.clock-chip:hover {
+  border-color: var(--on-surface-variant);
+}
+
+.clock-chip.active {
+  border-color: var(--primary);
+  box-shadow: 0 0 0 2px color-mix(in srgb, var(--primary) 35%, transparent);
+}
+
+.clock-prev {
+  height: 54px;
+  width: 100%;
+  display: grid;
+  place-items: center;
+  pointer-events: none;
+  overflow: hidden;
+}
+
+.clock-prev > * {
+  transform: scale(var(--prev-scale, 0.22));
+  transform-origin: center;
+}
+
+.clock-prev .clock {
+  text-shadow: none;
+  white-space: nowrap;
+}
+
+.clock-chip-name {
+  font-size: 11.5px;
+  font-weight: 700;
+  color: var(--on-surface-variant);
+}
+
+/* Quick-link customization */
+.link-row {
+  align-items: center;
+  gap: 8px;
+  padding: 4px 0;
+}
+
+.link-icon-input {
+  width: 40px;
+  text-align: center;
+  background: var(--surface-container-high);
+  border: 1px solid var(--outline);
+  border-radius: 10px;
+  padding: 5px 0;
+  font-size: 15px;
+  color: var(--on-surface);
+  outline: none;
+}
+
+.link-color-input {
+  width: 28px;
+  height: 28px;
+  padding: 0;
+  border: 1px solid var(--outline);
+  border-radius: 8px;
+  background: transparent;
+  cursor: pointer;
+}
+
+.link-name {
+  flex: 1;
+  color: var(--on-surface-variant);
+  font-size: 14px;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.dock-emoji {
+  font-size: 22px;
+  line-height: 1;
+}
+
+/* Ambient screensaver */
+.right-col,
+.dock,
+.corner-btn,
+.appearance-switch {
+  transition: opacity 1s ease;
+}
+
+.app.ambient .right-col,
+.app.ambient .dock,
+.app.ambient .corner-btn,
+.app.ambient .appearance-switch {
+  opacity: 0;
+  pointer-events: none;
+}
+
+.app.ambient .hero {
+  animation: ambient-drift 120s ease-in-out infinite alternate;
+}
+
+@keyframes ambient-drift {
+  0% {
+    transform: translateY(-50%) translateX(0);
+  }
+  50% {
+    transform: translateY(-44%) translateX(3vw);
+  }
+  100% {
+    transform: translateY(-56%) translateX(1vw);
+  }
+}
+
 /* ---------- City autocomplete ---------- */
 .city-input {
   position: relative;
@@ -862,12 +1336,14 @@ select {
   border-radius: var(--radius-pill);
   padding: 9px 16px;
   font-size: 14px;
+  transition: background-color 0.25s ease, transform 0.12s cubic-bezier(0.2, 0.7, 0.2, 1);
 }
 
 .btn-ghost {
   color: var(--on-surface-variant);
   padding: 8px 12px;
   border-radius: var(--radius-pill);
+  transition: background-color 0.15s ease, color 0.15s ease, transform 0.12s cubic-bezier(0.2, 0.7, 0.2, 1);
 }
 
 .btn-ghost:hover {
@@ -921,7 +1397,7 @@ select {
   border-radius: 999px;
   background: var(--track);
   position: relative;
-  transition: background 0.15s ease;
+  transition: background-color 0.15s ease, transform 0.12s cubic-bezier(0.2, 0.7, 0.2, 1);
   flex-shrink: 0;
 }
 
@@ -959,7 +1435,7 @@ select {
   width: clamp(210px, 24vw, 320px);
   height: clamp(210px, 24vw, 320px);
   display: block;
-  filter: drop-shadow(0 8px 24px rgba(0, 0, 0, 0.18));
+  filter: drop-shadow(0 8px 24px rgba(0, 0, 0, 0.18)) drop-shadow(0 0 28px color-mix(in srgb, var(--primary-strong) 20%, transparent));
 }
 
 .analog-face {
@@ -1029,7 +1505,8 @@ select {
   line-height: 1.05;
   color: var(--primary-strong);
   text-transform: capitalize;
-  text-shadow: var(--on-bg-shadow, none);
+  text-shadow: var(--on-bg-shadow, 0 0 0 transparent),
+    0 0 40px color-mix(in srgb, var(--primary-strong) 22%, transparent);
 }
 
 /* ---------- Flip clock ---------- */
@@ -1050,7 +1527,7 @@ select {
   display: grid;
   place-items: center;
   overflow: hidden;
-  box-shadow: var(--shadow-card);
+  box-shadow: var(--shadow-card), 0 0 22px color-mix(in srgb, var(--primary-strong) 14%, transparent);
 }
 
 .app.glass .flip-card {
@@ -1159,7 +1636,62 @@ select {
   opacity: 0.5;
 }
 
+/* Notes */
+.notes-input {
+  width: 100%;
+  background: transparent;
+  border: none;
+  outline: none;
+  resize: vertical;
+  min-height: 72px;
+  font: inherit;
+  font-size: 14px;
+  line-height: 1.5;
+  color: var(--on-surface);
+}
+
+.notes-input::placeholder {
+  color: var(--on-surface-variant);
+}
+
 /* Timer */
+.timer-ring-wrap {
+  position: relative;
+  width: 148px;
+  margin: 4px auto 2px;
+}
+
+.timer-ring {
+  display: block;
+  width: 100%;
+}
+
+.ring-track {
+  fill: none;
+  stroke: var(--track);
+  stroke-width: 7;
+}
+
+.ring-fill {
+  fill: none;
+  stroke: var(--primary);
+  stroke-width: 7;
+  stroke-linecap: round;
+  transition: stroke-dashoffset 0.9s linear, stroke 0.25s ease;
+}
+
+.ring-fill.running {
+  filter: drop-shadow(0 0 6px color-mix(in srgb, var(--primary) 55%, transparent));
+}
+
+.timer-ring-wrap .timer-time {
+  position: absolute;
+  inset: 0;
+  display: grid;
+  place-items: center;
+  font-size: 30px;
+}
+
 .timer-time {
   font-size: 46px;
   font-weight: 600;
@@ -1269,9 +1801,22 @@ select {
   opacity: 0.6;
 }
 
-.habit-streak {
-  font-size: 13px;
-  color: var(--on-surface-variant);
+.habit-dots {
+  display: flex;
+  gap: 3px;
+  align-items: center;
+}
+
+.habit-dot {
+  width: 6px;
+  height: 6px;
+  border-radius: 50%;
+  background: color-mix(in srgb, var(--on-surface) 18%, transparent);
+  flex-shrink: 0;
+}
+
+.habit-dot.done {
+  background: var(--primary-strong);
 }
 
 .habit-del {
@@ -1354,6 +1899,31 @@ select {
 
 .wx-toggle:hover {
   background: var(--surface-container-high);
+}
+
+/* Weather icon animations — scoped to the main card icon only, not hourly row. */
+@keyframes wx-spin {
+  to { transform: rotate(360deg); }
+}
+@keyframes wx-drift {
+  0%, 100% { transform: translateX(0); }
+  50% { transform: translateX(2.5px); }
+}
+@keyframes wx-breathe {
+  0%, 100% { transform: scale(1); }
+  50% { transform: scale(1.05); }
+}
+
+.weather-top .wx-anim-sun {
+  animation: wx-spin 20s linear infinite;
+  transform-origin: center;
+  transform-box: fill-box;
+}
+.weather-top .wx-anim-cloud {
+  animation: wx-drift 5s ease-in-out infinite;
+}
+.weather-top .wx-anim-partly {
+  animation: wx-breathe 4.5s ease-in-out infinite;
 }
 
 .wx-seg {
@@ -1586,6 +2156,92 @@ select {
   font-size: 12px;
   color: var(--on-surface-variant);
 }
+
+/* ---------- Visual polish ---------- */
+
+/* Smooth surface/color changes when theme or accent switches. Excludes elements
+   that already define their own transition (corner-btn, dock a, toggle, etc.). */
+body {
+  transition: color 0.25s ease;
+}
+
+.card,
+.panel,
+.ai-menu,
+.chip {
+  transition: background-color 0.25s ease, color 0.25s ease, border-color 0.2s ease, box-shadow 0.25s ease;
+}
+
+.mini-input,
+.field input:not([type='range']),
+.field select {
+  transition: background-color 0.25s ease, border-color 0.2s ease;
+}
+
+/* Small interactive pills that need both theme + micro-interaction transitions. */
+.mode-pill,
+.timer-presets .preset,
+.wx-seg button {
+  transition: background-color 0.2s ease, color 0.2s ease, transform 0.12s cubic-bezier(0.2, 0.7, 0.2, 1);
+}
+
+/* Press: scale down, spring back via the existing transition. */
+.btn-pill:active {
+  transform: scale(0.94);
+}
+
+.btn-ghost:active {
+  transform: scale(0.94);
+}
+
+.toggle:active {
+  transform: scale(0.9);
+}
+
+.mode-pill:active,
+.timer-presets .preset:active,
+.wx-seg button:active,
+.timer-edit .step:active {
+  transform: scale(0.88);
+}
+
+.dock a:active {
+  transform: translateY(-2px) scale(0.95);
+}
+
+/* Accent glow on widget card hover. Glass mode drops the base shadow so glow only. */
+.widget-slot:hover .card {
+  box-shadow: var(--shadow-card),
+    0 0 0 1px color-mix(in srgb, var(--primary-strong) 30%, transparent),
+    0 6px 24px color-mix(in srgb, var(--primary-strong) 10%, transparent);
+}
+
+.app.glass .widget-slot:hover .card {
+  box-shadow: 0 0 0 1px color-mix(in srgb, var(--primary-strong) 30%, transparent),
+    0 6px 24px color-mix(in srgb, var(--primary-strong) 10%, transparent);
+}
+
+/* Staggered widget entrance: each slot fades + slides up slightly on load.
+   Uses fill-mode:both so slots start invisible during their delay. */
+@keyframes widget-enter {
+  from {
+    opacity: 0;
+    transform: translateY(16px);
+  }
+  to {
+    opacity: 1;
+    transform: none;
+  }
+}
+
+.widget-slot:nth-child(1) { animation-delay:   0ms; }
+.widget-slot:nth-child(2) { animation-delay:  55ms; }
+.widget-slot:nth-child(3) { animation-delay: 110ms; }
+.widget-slot:nth-child(4) { animation-delay: 165ms; }
+.widget-slot:nth-child(5) { animation-delay: 220ms; }
+.widget-slot:nth-child(6) { animation-delay: 275ms; }
+.widget-slot:nth-child(7) { animation-delay: 330ms; }
+.widget-slot:nth-child(8) { animation-delay: 385ms; }
 
 /* ---------- Responsive: stack into one centered column on narrow/portrait ----------
    Placed last so it overrides the wide two-column base layout in the cascade. */

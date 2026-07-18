@@ -1,10 +1,7 @@
 import { useStoredState } from '../hooks/useStoredState'
 import { DEFAULT_FOCUS, type FocusState } from '../lib/types'
+import { localDateStr as today } from '../lib/dates'
 import { CheckIcon } from './Icons'
-
-function today(): string {
-  return new Date().toISOString().slice(0, 10)
-}
 
 export function FocusWidget() {
   const [focus, setFocus] = useStoredState<FocusState>('focus', DEFAULT_FOCUS)

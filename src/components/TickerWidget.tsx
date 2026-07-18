@@ -1,9 +1,21 @@
 import { useEffect, useState } from 'react'
+import { getItem, setItem } from '../lib/storage'
 
 interface Coin {
   id: string
   price: number
   change: number
+}
+
+// CoinGecko's free tier rate-limits aggressively; cache prices so opening new
+// tabs doesn't hammer the API.
+const CACHE_KEY = 'tickerCache'
+const TTL = 5 * 60 * 1000
+
+interface TickerCache {
+  coins: Coin[]
+  ids: string
+  fetchedAt: number
 }
 
 // Crypto prices via CoinGecko (free, no key). Symbols are CoinGecko coin ids.
@@ -30,12 +42,29 @@ export function TickerWidget({ symbols }: { symbols: string[] }) {
 
   useEffect(() => {
     let active = true
-    const load = () =>
-      fetchPrices(symbols)
-        .then((c) => active && (setCoins(c), setError(c.length === 0)))
-        .catch(() => active && setError(true))
-    load()
-    const id = setInterval(load, 5 * 60 * 1000)
+    const ids = symbols.join(',')
+
+    const load = async (force: boolean) => {
+      if (!force) {
+        const cached = await getItem<TickerCache | null>(CACHE_KEY, null)
+        if (cached && cached.ids === ids && cached.coins.length > 0) {
+          if (active) setCoins(cached.coins)
+          if (Date.now() - cached.fetchedAt < TTL) return // fresh enough
+        }
+      }
+      const coins = await fetchPrices(symbols)
+      if (!active) return
+      if (coins.length > 0) {
+        setCoins(coins)
+        setError(false)
+        void setItem(CACHE_KEY, { coins, ids, fetchedAt: Date.now() } satisfies TickerCache)
+      } else {
+        setError(true)
+      }
+    }
+
+    load(false).catch(() => active && setError(true))
+    const id = setInterval(() => load(true).catch(() => active && setError(true)), TTL)
     return () => {
       active = false
       clearInterval(id)

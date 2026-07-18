@@ -1,9 +1,13 @@
+import type { PaletteStyle } from './dynamicColor'
+export type { PaletteStyle }
+
 export type ThemeName = 'purple' | 'midnight' | 'teal' | 'peach' | 'mint' | 'lavender'
 export type Units = 'metric' | 'imperial'
 export type ClockStyle = 'digital' | 'minimal' | 'analog' | 'analogClassic' | 'word' | 'flip'
 export type ColorScheme = 'dark' | 'light'
 export type IconStyle = 'themed' | 'favicon'
 export type CardShape = 'rounded' | 'squircle' | 'pill'
+export type WeatherSource = 'city' | 'geo'
 
 // Card corner radius per shape (applied to --radius-card).
 export const CARD_RADIUS: Record<CardShape, string> = {
@@ -38,6 +42,8 @@ export interface LinkItem {
   id: string
   name: string
   url: string
+  color?: string // custom tint for the dock icon
+  icon?: string // custom emoji/character overriding the brand glyph
 }
 
 export interface TodoItem {
@@ -57,6 +63,7 @@ export interface WidgetToggles {
   ticker: boolean
   search: boolean
   quote: boolean
+  notes: boolean
   dock: boolean
 }
 
@@ -93,14 +100,18 @@ export interface Settings {
   colorScheme: ColorScheme // light/dark tones for auto-from-wallpaper
   accentMode: AccentMode // 'auto' = from wallpaper, 'custom' = chosen color
   accentColor: string // hex seed used when accentMode === 'custom'
+  paletteStyle: PaletteStyle // Material scheme personality for auto colors
   clockStyle: ClockStyle
   hour12: boolean
   iconStyle: IconStyle // shortcut icons: themed glyphs or full-color favicons
   cardShape: CardShape
   units: Units
   city: string
+  weatherSource: WeatherSource // city name lookup or browser geolocation
   tagline: string
   tickerSymbols: string[] // CoinGecko coin ids (e.g. bitcoin, ethereum)
+  compactWidgets: boolean
+  ambient: boolean // dim widgets into a screensaver after 1 min idle
   show: WidgetToggles
   background: BackgroundSettings
 }
@@ -112,14 +123,18 @@ export const DEFAULT_SETTINGS: Settings = {
   colorScheme: 'dark',
   accentMode: 'auto',
   accentColor: '#7c6bdc',
+  paletteStyle: 'calm',
   clockStyle: 'digital',
   hour12: false,
   iconStyle: 'themed',
   cardShape: 'squircle',
   units: 'metric',
   city: 'Melbourne',
+  weatherSource: 'city',
   tagline: 'LOCK IN',
   tickerSymbols: ['bitcoin', 'ethereum'],
+  compactWidgets: false,
+  ambient: true,
   show: {
     weather: true,
     forecast: false,
@@ -131,6 +146,7 @@ export const DEFAULT_SETTINGS: Settings = {
     ticker: false,
     search: false,
     quote: false,
+    notes: false,
     dock: true,
   },
   background: { blur: 3, dim: 35, glass: true, cardOpacity: 70, fade: 300 },
@@ -140,8 +156,17 @@ export const DEFAULT_SETTINGS: Settings = {
 // can be large; keeping it out of `settings` avoids rewriting it on every tweak).
 import type { Palette, Swatch } from './dynamicColor'
 
+export type WallpaperKind = 'image' | 'gif' | 'video'
+
 export interface WallpaperState {
+  // Static wallpapers live entirely in `dataUrl`. Animated ones (gif/video)
+  // keep their file as a Blob in IndexedDB ('wallpaperMedia'); `dataUrl` then
+  // holds a captured still frame used for palette analysis, the boot-script
+  // placeholder, and as a fallback while the media loads.
+  kind: WallpaperKind
+  mediaId: string // changes on every media upload so tabs know to reload
   dataUrl: string
+  thumb: string // tiny data URL cached for the pre-paint boot script
   palette: Palette | null
   sig: string // signature of (image + scheme + accent) the palette was built from
   luminance: number // brightness behind the hero region (0-255)
@@ -151,7 +176,10 @@ export interface WallpaperState {
 }
 
 export const DEFAULT_WALLPAPER: WallpaperState = {
+  kind: 'image',
+  mediaId: '',
   dataUrl: '',
+  thumb: '',
   palette: null,
   sig: '',
   luminance: 128,
@@ -159,6 +187,10 @@ export const DEFAULT_WALLPAPER: WallpaperState = {
   seed: '',
   analyzedFor: '',
 }
+
+export const DEFAULT_WIDGET_ORDER = [
+  'weather', 'focus', 'timer', 'habits', 'quickTimer', 'ticker', 'search', 'quote', 'notes',
+]
 
 export const DEFAULT_LINKS: LinkItem[] = [
   { id: 'yt', name: 'YouTube', url: 'https://youtube.com' },

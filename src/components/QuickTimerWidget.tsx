@@ -7,7 +7,6 @@ function mmss(s: number): string {
   return `${String(m).padStart(2, '0')}:${String(sec).padStart(2, '0')}`
 }
 
-// Short, dependency-free chime when the timer finishes.
 function chime() {
   try {
     const Ctx = window.AudioContext || (window as unknown as { webkitAudioContext: typeof AudioContext }).webkitAudioContext
@@ -33,16 +32,27 @@ const PRESETS = [5, 10, 15, 25]
 
 export function QuickTimerWidget() {
   const [mins, setMins] = useStoredState('timerMinutes', 5)
-  const total = Math.max(1, mins) * 60
-  const [left, setLeft] = useState(total)
+  const [started, setStarted] = useStoredState('timerStarted', false)
+  const [left, setLeft] = useStoredState('timerLeft', Math.max(1, 5) * 60)
   const [running, setRunning] = useState(false)
-  const [started, setStarted] = useState(false)
+  const total = Math.max(1, mins) * 60
 
-  // Keep the clock synced to the chosen minutes while idle (covers the async
-  // stored-value load). Gated on `started`, so it never affects a run.
   useEffect(() => {
     if (!started) setLeft(Math.max(1, mins) * 60)
   }, [mins, started])
+
+  useEffect(() => {
+    const handler = () => {
+      if (!started) {
+        setStarted(true)
+        setRunning(true)
+      } else {
+        setRunning((r) => !r)
+      }
+    }
+    window.addEventListener('calmtab:focus-timer', handler)
+    return () => window.removeEventListener('calmtab:focus-timer', handler)
+  }, [started])
 
   useEffect(() => {
     if (!running) return
@@ -57,13 +67,11 @@ export function QuickTimerWidget() {
 
   const done = started && !running && left <= 0
   const pct = total > 0 ? Math.round(((total - left) / total) * 100) : 0
-  // Update minutes AND the displayed time together so the edit view never flickers.
   const setM = (v: number) => {
     const nv = Math.min(180, Math.max(1, v))
     setMins(nv)
     setLeft(nv * 60)
   }
-  // Reset: restart the same duration in place. Clear: stop and return to setup.
   const restart = () => {
     setRunning(false)
     setLeft(total)
