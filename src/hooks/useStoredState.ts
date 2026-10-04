@@ -10,6 +10,10 @@ import { getItem, setItem, subscribe } from '../lib/storage'
 //   don't blow through chrome.storage.sync's write-rate quota.
 export function useStoredState<T>(key: string, initial: T) {
   const [value, setValue] = useState<T>(initial)
+  // Exposed so callers can tell "the user's value" from "the default we are
+  // holding until storage answers". Anything that paints (theme, wallpaper)
+  // must wait, or it repaints the page in the defaults for a frame or two.
+  const [hydrated, setHydrated] = useState(false)
   const loaded = useRef(false)
   const dirty = useRef(false) // user changed the value locally
   const remote = useRef(false) // current update came from another tab
@@ -30,7 +34,9 @@ export function useStoredState<T>(key: string, initial: T) {
     let active = true
     getItem<T>(key, initial).then((stored) => {
       loaded.current = true
-      if (!active || dirty.current) return // don't clobber an early user edit
+      if (!active) return
+      setHydrated(true)
+      if (dirty.current) return // don't clobber an early user edit
       remote.current = true
       setValue(stored)
     })
@@ -76,5 +82,5 @@ export function useStoredState<T>(key: string, initial: T) {
     setValue(updater as T | ((prev: T) => T))
   }, [])
 
-  return [value, set] as const
+  return [value, set, hydrated] as const
 }

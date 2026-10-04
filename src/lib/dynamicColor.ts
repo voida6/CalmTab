@@ -135,6 +135,72 @@ export interface ImageAnalysis {
   luminance: number // 0-255 average brightness behind the hero (left-center) region
 }
 
+/** One quantized colour from the wallpaper, in HCT terms. */
+export interface Candidate {
+  argb: number
+  population: number // how many pixels fell into this bucket
+  chroma: number // 0 = grey, ~120 = as saturated as colours get
+  tone: number // 0 = black, 100 = white
+  hue: number // degrees
+}
+
+/** Hues closer together than this count as the same colour for picking
+ *  purposes. Six swatches that are all slightly different blues is not a
+ *  choice, so the list is spread across the wheel instead. */
+const MIN_HUE_SEPARATION = 24
+
+function hueDistance(a: number, b: number): number {
+  const d = Math.abs(a - b) % 360
+  return d > 180 ? 360 - d : d
+}
+
+/**
+ * Rank the wallpaper's colours and pick accents worth offering.
+ *
+ * Two things were wrong with ranking by raw dominance. A photo that is mostly
+ * muted sky gave a muted accent, because the dullest colour was also the most
+ * common; and the six suggestions were often six shades of one hue, which is
+ * not really six suggestions. So popularity is damped with a square root
+ * (still matters, no longer dominates), chroma is weighted properly, and each
+ * pick has to be a meaningfully different hue from the ones already taken.
+ */
+export function pickAccents(candidates: Candidate[], count: number): number[] {
+  const usable = candidates
+    // Near-grey makes a lifeless accent; near-black and near-white can't be
+    // told apart from the surface once Material has finished with them.
+    .filter((c) => c.chroma >= 12 && c.tone >= 15 && c.tone <= 90)
+    .map((c) => ({
+      ...c,
+      // Popularity is damped hard. At ^0.35, a colour covering ten times more
+      // of the image carries only ~2.2x the weight — enough that dominance
+      // still decides between similar colours, not enough for a large dull
+      // region to beat a smaller vivid one. Chroma is capped because past a
+      // point more saturation stops being more useful.
+      score: Math.pow(c.population, 0.35) * (20 + Math.min(c.chroma, 70)),
+    }))
+    .sort((a, b) => b.score - a.score)
+
+  const picked: typeof usable = []
+  for (const candidate of usable) {
+    if (picked.length >= count) break
+    if (picked.every((p) => hueDistance(p.hue, candidate.hue) >= MIN_HUE_SEPARATION)) {
+      picked.push(candidate)
+    }
+  }
+
+  // A genuinely two-tone wallpaper should offer two swatches — that is an
+  // honest answer. But if spreading by hue leaves a single option, the image
+  // is effectively monochrome, and near-duplicates beat no choice at all.
+  if (picked.length < 2) {
+    for (const candidate of usable) {
+      if (picked.length >= count) break
+      if (!picked.includes(candidate)) picked.push(candidate)
+    }
+  }
+
+  return picked.map((c) => c.argb)
+}
+
 // Analyze a wallpaper: brightness behind the hero text + candidate accent colors.
 export async function analyzeImage(dataUrl: string): Promise<ImageAnalysis> {
   const { QuantizerCelebi, Score, Hct, hexFromArgb, argbFromRgb, themeFromSourceColor } = await import(
@@ -175,18 +241,12 @@ export async function analyzeImage(dataUrl: string): Promise<ImageAnalysis> {
   let seed = '#7c7c8a'
   try {
     const quantized = QuantizerCelebi.quantize(pixels, 128)
-    // Rank by DOMINANCE (how much of the image a color covers) with a mild
-    // chroma weight — so the wallpaper's main colour wins over a small vivid
-    // accent. Skip near-grey and near black/white.
-    const cands = [...quantized.entries()]
-      .map(([argb, pop]) => {
-        const h = Hct.fromInt(argb)
-        return { argb, score: pop * (h.chroma + 16), chroma: h.chroma, tone: h.tone }
-      })
-      .filter((c) => c.chroma >= 10 && c.tone >= 12 && c.tone <= 92)
-      .sort((a, b) => b.score - a.score)
-    let chosen = cands.slice(0, 6).map((c) => c.argb)
-    // Fallback for low-colour (greyscale-ish) images.
+    const candidates: Candidate[] = [...quantized.entries()].map(([argb, pop]) => {
+      const h = Hct.fromInt(argb)
+      return { argb, population: pop, chroma: h.chroma, tone: h.tone, hue: h.hue }
+    })
+    let chosen = pickAccents(candidates, 6)
+    // Fallback for images with no usable colour at all (greyscale photos).
     if (chosen.length === 0) chosen = Score.score(quantized).slice(0, 6)
     swatches = chosen.map((argb) => ({
       seed: hexFromArgb(argb),

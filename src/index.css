@@ -13,7 +13,12 @@ body,
 /* Base background lives on <html> (not body) so the boot script can paint it
    before first paint. body stays transparent and lets it show through. */
 html {
-  background: var(--bg);
+  background-color: var(--bg);
+  /* A handful of radial gradients standing in for the wallpaper. Gradients need
+     no decode, so this is on screen in the first frame — the wallpaper itself
+     arriving over the top of it is then invisible, where a flat colour would
+     have read as a flash. */
+  background-image: var(--bg-grad, none);
   transition: background-color 0.3s ease;
 }
 
@@ -48,21 +53,32 @@ select {
 /* ---------- App shell ---------- */
 .app {
   position: relative;
-  height: 100vh;
-  width: 100vw;
+  /* `zoom` scales layout as well as text, which `transform: scale()` does not,
+     so the whole page grows or shrinks without anything overlapping. The
+     viewport units are divided back out, otherwise a scale above 100% would
+     make the shell taller than the window and produce a scrollbar. */
+  zoom: var(--ui-scale, 1);
+  height: calc(100vh / var(--ui-scale, 1));
+  width: calc(100vw / var(--ui-scale, 1));
   overflow: hidden;
+  display: flex;
+  align-items: stretch;
+  outline: none; /* it is a focus target for `page` mode, not a control */
+  /* Every clock face derives its size from this one value, so the slider
+     moves them all consistently. */
+  --clock-size: calc(clamp(56px, 7.5vw, 112px) * var(--clock-scale, 1));
   /* Fade the UI in over the (already-correct) background. The .ready class is
      added on the second animation frame after mount, so the transition runs on
      the compositor instead of competing with React's first render. */
+  /* Opacity only. The columns below do the movement; sliding the shell as well
+     doubled it up, which is what read as the whole page popping into place. */
   opacity: 0;
-  transform: translateY(8px);
-  transition: opacity var(--fade, 300ms) ease-out, transform var(--fade, 300ms) ease-out;
-  will-change: opacity, transform;
+  transition: opacity var(--fade, 300ms) ease-out;
+  will-change: opacity;
 }
 
 .app.ready {
   opacity: 1;
-  transform: none;
 }
 
 @media (prefers-reduced-motion: reduce) {
@@ -76,14 +92,18 @@ select {
   .bg-dim {
     transition: none;
   }
-  .widget-slot {
-    animation: none;
-    animation-delay: 0s;
+  /* !important because the entrance rules live further down the file at the
+     same specificity, and would otherwise win the cascade. */
+  .app.ready .widget-slot,
+  .app.ready .main-col > .hero,
+  .app.ready .main-col > .command {
+    animation: none !important;
+    animation-delay: 0s !important;
   }
   .widget-slot:hover > .card {
     transform: none;
   }
-  .app.ambient .hero {
+  .app.ambient .main-col > .hero {
     animation: none;
   }
   .wx-anim-sun,
@@ -94,34 +114,52 @@ select {
 }
 
 /* ---------- Background layers ---------- */
-/* Slight oversize + scale so blur doesn't reveal transparent edges. */
-/* Background is driven entirely by CSS variables (set by boot.js before first
-   paint, then kept in sync by React). This makes the first frame show the fully
-   blurred wallpaper with no JS dependency. */
-.bg-image {
+/* Blurring costs time proportional to the area blurred, and for an animated
+   wallpaper the browser pays that cost again on every frame — a full-screen
+   GIF was re-blurring several million pixels 20+ times a second, which is
+   where most of the lag came from.
+
+   So whenever there is any blur, the layer is laid out at a fraction of the
+   size, blurred there, and scaled back up. A quarter-size layer is one
+   sixteenth of the pixels. The radius is divided by the same factor so it
+   looks the same, and the upscaling is invisible because the thing being
+   upscaled is blurred by definition.
+
+   `--wp-shrink` is 1 when blur is 0 (full detail, nothing to hide) and 4
+   otherwise; App sets it alongside the radius.
+
+   Everything here is driven by CSS variables, which boot.js sets before first
+   paint, so the first frame already shows the finished wallpaper. */
+.bg-image,
+.bg-video {
   position: fixed;
-  inset: -60px;
+  top: 0;
+  left: 0;
+  /* Oversized by 10%, then pulled back by half of that, so the soft edges
+     the blur leaves never reach the real edges of the screen. */
+  width: calc(110% / var(--wp-shrink, 1));
+  height: calc(110% / var(--wp-shrink, 1));
+  transform: scale(var(--wp-shrink, 1)) translate(-4.5%, -4.5%);
+  transform-origin: top left;
+  filter: blur(calc(var(--wp-blur, 0px) / var(--wp-shrink, 1)));
+  opacity: var(--wp-on, 0);
+  z-index: -2;
+  /* Never transition `filter`: every intermediate value is a fresh
+     full-screen blur, so a 250ms fade meant about fifteen of them in a row. */
+  transition: opacity 0.3s ease;
+  /* Its own compositor layer, so the blurred result is cached instead of
+     being recomputed whenever something above it repaints. */
+  will-change: transform;
+}
+
+.bg-image {
   background-image: var(--wp-image, none);
   background-size: cover;
   background-position: center;
-  filter: blur(var(--wp-blur, 0px));
-  transform: scale(1.06);
-  opacity: var(--wp-on, 0);
-  z-index: -2;
-  transition: opacity 0.3s ease, filter 0.25s ease;
 }
 
 .bg-video {
-  position: fixed;
-  inset: -60px;
-  width: calc(100% + 120px);
-  height: calc(100% + 120px);
   object-fit: cover;
-  filter: blur(var(--wp-blur, 0px));
-  transform: scale(1.06);
-  opacity: var(--wp-on, 0);
-  z-index: -2;
-  transition: opacity 0.3s ease, filter 0.25s ease;
 }
 
 .bg-dim {
@@ -146,6 +184,18 @@ select {
 }
 
 /* ---------- Frosted glass (when a wallpaper is set) ---------- */
+/* Backdrop blur is the single most expensive thing this page does. It is kept
+   to the few large surfaces where it reads, and `Reduce effects` removes even
+   those — the surfaces just become more opaque instead. */
+.app.plain .card,
+.app.plain .panel,
+.app.plain .command,
+.app.plain .ai-menu {
+  backdrop-filter: none;
+  -webkit-backdrop-filter: none;
+  background: color-mix(in srgb, var(--surface-container) 94%, transparent);
+}
+
 .app.glass .card,
 .app.glass .panel {
   background: color-mix(in srgb, var(--surface-container) var(--card-opacity, 70%), transparent);
@@ -170,11 +220,14 @@ select {
   background: color-mix(in srgb, var(--surface-container) calc(var(--card-opacity, 70%) - 18%), transparent);
 }
 
+/* No backdrop-filter on the small controls. Each one is a separate compositor
+   layer that re-samples what is behind it on every frame, and with a dock full
+   of shortcuts that was a dozen-plus of them over an already-blurred
+   wallpaper — all that cost to blur something that is blurred anyway. A little
+   more opacity gets the same look for nothing. */
 .app.glass .corner-btn,
 .app.glass .dock a {
-  background: color-mix(in srgb, var(--surface-container) 42%, transparent);
-  backdrop-filter: blur(14px) saturate(150%);
-  -webkit-backdrop-filter: blur(14px) saturate(150%);
+  background: color-mix(in srgb, var(--surface-container) 62%, transparent);
 }
 
 .app.glass .chip {
@@ -182,24 +235,55 @@ select {
 }
 
 /* ---------- Hero (clock + greeting) ---------- */
+/* The launcher is the point of the page, so the middle column carries the
+   clock, the bar and the shortcuts, and the widgets get their own rail. When
+   no widgets are on, the rail isn't rendered at all and this centres on the
+   full window. */
+.main-col {
+  flex: 1;
+  min-width: 0;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: clamp(18px, 3vh, 34px);
+  padding: 92px clamp(24px, 4vw, 64px);
+  overflow: hidden;
+}
+
 .hero {
-  position: absolute;
-  top: 50%;
-  left: clamp(40px, 9vw, 170px);
-  transform: translateY(-50%);
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 10px;
+  text-align: center;
   user-select: none;
 }
 
+/* Minimal mode drops everything but the clock and the bar, so the pair sits
+   optically centred rather than pinned to the top. */
+.app.minimal .main-col {
+  padding: 0 clamp(24px, 4vw, 64px);
+}
+
 .clock {
-  font-size: clamp(72px, 11vw, 168px);
+  /* Smaller than it used to be: the clock now shares the middle column with
+     the launcher and the shortcut grid rather than owning the page. Minimal
+     mode, which has nothing else to fit, gets the old size back below. */
+  font-size: var(--clock-size);
   font-weight: 600;
   line-height: 1;
   letter-spacing: -1px;
   color: var(--primary-strong);
+  /* Tabular figures so the digits don't shuffle sideways as they change, and
+     a slight negative tracking so large sizes don't look airy. */
   font-variant-numeric: tabular-nums;
+  font-feature-settings: 'tnum' 1, 'ss01' 1;
+  /* One glow layer, not three, and a much smaller radius. The old version
+     painted a 110px blur behind every digit on every tick — the single most
+     expensive repaint on the page for something barely visible. */
   text-shadow: var(--on-bg-shadow, 0 0 0 transparent),
-    0 0 50px color-mix(in srgb, var(--primary-strong) 22%, transparent),
-    0 0 110px color-mix(in srgb, var(--primary-strong) 10%, transparent);
+    0 0 42px color-mix(in srgb, var(--primary-strong) 20%, transparent);
 }
 
 .greeting {
@@ -272,11 +356,9 @@ select {
 
 /* ---------- Right column of cards ---------- */
 .right-col {
-  position: absolute;
-  top: 92px; /* clear the top-right controls (apps / appearance toggle) */
-  bottom: 24px;
-  right: clamp(40px, 6vw, 120px);
-  width: clamp(360px, 34vw, 480px);
+  flex: none;
+  margin: 92px clamp(28px, 4vw, 84px) 28px 0;
+  width: clamp(320px, 30vw, 440px);
   overflow-y: auto;
   display: flex;
   flex-direction: column;
@@ -293,19 +375,34 @@ select {
 .widget-slot {
   cursor: grab;
   position: relative;
-  animation: widget-enter 0.42s cubic-bezier(0.16, 1, 0.3, 1) both;
   will-change: transform, opacity;
 }
 
+/* The entrance is keyed to `.ready`, not to mount. The page waits for stored
+   settings before it shows anything, and an animation started at mount would
+   have finished (behind an invisible shell) by then — which is exactly what
+   made everything appear at once, like a popup. */
+.app.ready .widget-slot {
+  animation: widget-enter 0.55s cubic-bezier(0.16, 1, 0.3, 1) both;
+}
+
 /* Staggered entrance, top to bottom. */
-.widget-slot:nth-child(1) { animation-delay: 0.02s; }
-.widget-slot:nth-child(2) { animation-delay: 0.07s; }
-.widget-slot:nth-child(3) { animation-delay: 0.12s; }
-.widget-slot:nth-child(4) { animation-delay: 0.17s; }
-.widget-slot:nth-child(5) { animation-delay: 0.22s; }
-.widget-slot:nth-child(6) { animation-delay: 0.27s; }
-.widget-slot:nth-child(7) { animation-delay: 0.32s; }
-.widget-slot:nth-child(n + 8) { animation-delay: 0.37s; }
+.app.ready .widget-slot:nth-child(1) { animation-delay: 120ms; }
+.app.ready .widget-slot:nth-child(2) { animation-delay: 175ms; }
+.app.ready .widget-slot:nth-child(3) { animation-delay: 230ms; }
+.app.ready .widget-slot:nth-child(4) { animation-delay: 285ms; }
+.app.ready .widget-slot:nth-child(5) { animation-delay: 340ms; }
+.app.ready .widget-slot:nth-child(6) { animation-delay: 395ms; }
+.app.ready .widget-slot:nth-child(7) { animation-delay: 450ms; }
+.app.ready .widget-slot:nth-child(n + 8) { animation-delay: 505ms; }
+
+/* The middle column leads: clock first, then the search box. */
+.app.ready .main-col > .hero,
+.app.ready .main-col > .command {
+  animation: widget-enter 0.55s cubic-bezier(0.16, 1, 0.3, 1) both;
+}
+.app.ready .main-col > .hero { animation-delay: 0ms; }
+.app.ready .main-col > .command { animation-delay: 90ms; }
 
 /* Drag-handle hint (2x3 dot grip) that appears on hover. */
 .widget-slot::before {
@@ -349,9 +446,10 @@ select {
 }
 
 .card {
+  /* No backdrop-filter here: without a wallpaper there is nothing behind the
+     card worth blurring, and this rule applies to every widget on the page.
+     The glass variant below adds it back where it actually shows. */
   background: color-mix(in srgb, var(--surface-container) 90%, transparent);
-  backdrop-filter: blur(10px) saturate(1.25);
-  -webkit-backdrop-filter: blur(10px) saturate(1.25);
   border: 1px solid color-mix(in srgb, var(--on-surface) 7%, transparent);
   border-radius: var(--radius-card);
   box-shadow: var(--shadow-card);
@@ -529,6 +627,27 @@ select {
   gap: 22px;
 }
 
+/* Under the launcher bar the shortcuts wrap onto as many rows as they need
+   instead of running off the edge of a single line. */
+.dock.as-grid {
+  position: static;
+  transform: none;
+  flex-wrap: wrap;
+  justify-content: center;
+  gap: 16px;
+  max-width: 640px;
+}
+
+/* Tooltips point down here — above the tile there is now a search box. */
+.dock.as-grid a::after {
+  bottom: auto;
+  top: 118%;
+  transform: translateX(-50%) translateY(-6px);
+}
+.dock.as-grid a:hover::after {
+  transform: translateX(-50%) translateY(0);
+}
+
 .dock a {
   position: relative;
   width: 50px;
@@ -581,6 +700,758 @@ select {
   transform: translateX(-50%) translateY(0);
 }
 
+/* Bare mode: an empty wallpaper. The launcher is present the whole time — it
+   has to be, so a keystroke has somewhere to land — but invisible and
+   unclickable until something wakes it. */
+.app.bare .command {
+  opacity: 0;
+  pointer-events: none;
+  transition: opacity 0.5s ease;
+}
+
+.app.bare.revealed .command {
+  opacity: 1;
+  pointer-events: auto;
+  transition: opacity 0.18s ease;
+}
+
+/* Minimal mode has nothing else to fit, so the clock gets its old size back. */
+.app.minimal {
+  --clock-size: calc(clamp(72px, 11vw, 168px) * var(--clock-scale, 1));
+}
+
+/* Inside Settings the clock previews must stay chip-sized whatever the slider
+   says, or they would burst out of their buttons while being adjusted. */
+.panel {
+  --clock-scale: 1;
+  --clock-size: clamp(56px, 7.5vw, 112px);
+}
+
+/* ---------- Extra clock faces ---------- */
+
+.clock-terminal {
+  display: inline-flex;
+  align-items: baseline;
+  gap: 0.04em;
+  padding: 0.12em 0.24em;
+  border-radius: 0.12em;
+  background: color-mix(in srgb, var(--surface) 45%, transparent);
+  font-family: ui-monospace, SFMono-Regular, 'Cascadia Mono', Menlo, monospace;
+  font-size: calc(var(--clock-size) * 0.72);
+  font-weight: 500;
+  letter-spacing: 0.02em;
+}
+
+.term-digits {
+  /* Each pair sits in its own fixed cell so nothing shifts as digits change. */
+  display: inline-block;
+  min-width: 2ch;
+  text-align: center;
+}
+
+/* The colon blinks on the second. It fades rather than snaps, and holds its
+   width either way so the digits never shuffle sideways. */
+.term-colon {
+  transition: opacity 0.2s ease;
+}
+
+.term-colon.off {
+  opacity: 0.18;
+}
+
+.clock-binary {
+  display: inline-flex;
+  gap: calc(var(--clock-size) * 0.11);
+  align-items: flex-end;
+}
+
+.bin-col {
+  display: flex;
+  flex-direction: column;
+  gap: calc(var(--clock-size) * 0.06);
+  align-items: center;
+}
+
+.bin-dot,
+.bin-cell {
+  width: calc(var(--clock-size) * 0.17);
+  height: calc(var(--clock-size) * 0.17);
+  border-radius: 50%;
+}
+
+.bin-dot {
+  background: color-mix(in srgb, var(--primary-strong) 16%, transparent);
+  border: 1px solid color-mix(in srgb, var(--primary-strong) 26%, transparent);
+  transition: background 0.25s ease, box-shadow 0.25s ease;
+}
+
+.bin-dot.on {
+  background: var(--primary-strong);
+  box-shadow: 0 0 14px color-mix(in srgb, var(--primary-strong) 55%, transparent);
+}
+
+/* An empty slot in a column that can never reach that bit. It keeps the rows
+   aligned without showing a dot that would never light. */
+.bin-cell {
+  visibility: hidden;
+}
+
+.bin-label {
+  margin-top: 0.35em;
+  font-size: calc(var(--clock-size) * 0.13);
+  font-weight: 600;
+  font-variant-numeric: tabular-nums;
+  color: var(--on-bg, var(--on-surface-variant));
+  opacity: 0.4;
+}
+
+.clock-roman {
+  display: inline-flex;
+  align-items: baseline;
+  gap: 0.22em;
+  /* Roman numerals are much wider than digits, so this face needs to run
+     smaller than the others to occupy the same space. */
+  font-size: calc(var(--clock-size) * 0.6);
+  font-weight: 500;
+  letter-spacing: 0.08em;
+}
+
+.roman-sep {
+  opacity: 0.4;
+}
+
+.clock-progress {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 12px;
+}
+
+.progress-time {
+  font-size: calc(var(--clock-size) * 0.92);
+  line-height: 1;
+}
+
+.progress-track {
+  width: calc(var(--clock-size) * 3.4);
+  max-width: 90vw;
+  height: calc(var(--clock-size) * 0.07);
+  border-radius: var(--radius-pill);
+  background: color-mix(in srgb, var(--on-surface) 14%, transparent);
+  overflow: hidden;
+}
+
+.progress-fill {
+  height: 100%;
+  border-radius: inherit;
+  background: var(--primary-strong);
+  transition: width 1s linear;
+}
+
+.progress-label {
+  font-size: 13px;
+  font-weight: 600;
+  letter-spacing: 1px;
+  color: var(--on-bg, var(--on-surface-variant));
+  text-shadow: var(--on-bg-shadow, none);
+  opacity: 0.8;
+}
+
+.progress-label:hover {
+  opacity: 1;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .term-colon,
+  .bin-dot,
+  .progress-fill {
+    transition: none;
+  }
+}
+
+/* ---------- Calendar widget ---------- */
+.calendar-card {
+  gap: 10px;
+}
+
+.calendar-head {
+  align-items: center;
+}
+
+.calendar-title {
+  font-size: 14px;
+  font-weight: 600;
+  color: var(--on-surface);
+  padding: 2px 8px;
+  border-radius: var(--radius-pill);
+}
+
+.calendar-title:hover {
+  background: var(--surface-container-high);
+}
+
+.calendar-grid {
+  display: grid;
+  grid-template-columns: repeat(7, 1fr);
+  gap: 2px;
+  text-align: center;
+}
+
+.calendar-weekday {
+  font-size: 11px;
+  font-weight: 700;
+  color: var(--on-surface-variant);
+  opacity: 0.7;
+  padding-bottom: 4px;
+}
+
+.calendar-day {
+  font-size: 12.5px;
+  padding: 5px 0;
+  border-radius: 8px;
+  font-variant-numeric: tabular-nums;
+  color: var(--on-surface);
+}
+
+/* The padding days are present so every row is full, but they shouldn't
+   compete with the month you're actually looking at. */
+.calendar-day.is-outside {
+  opacity: 0.28;
+}
+
+.calendar-day.is-today {
+  background: var(--primary);
+  color: var(--surface);
+  font-weight: 700;
+}
+
+/* ---------- World clocks ---------- */
+.world-card {
+  gap: 6px;
+}
+
+.world-row {
+  align-items: baseline;
+  padding: 3px 0;
+}
+
+.world-city {
+  font-size: 13.5px;
+  color: var(--on-surface);
+}
+
+.world-time {
+  display: flex;
+  align-items: baseline;
+  gap: 6px;
+  font-size: 15px;
+  font-weight: 600;
+  font-variant-numeric: tabular-nums;
+  color: var(--primary-strong);
+}
+
+.world-shift {
+  font-size: 10.5px;
+  font-weight: 600;
+  color: var(--on-surface-variant);
+  opacity: 0.8;
+}
+
+/* ---------- Converter ---------- */
+.converter-card {
+  gap: 10px;
+}
+
+.converter-row {
+  align-items: center;
+  gap: 6px;
+}
+
+.converter-amount {
+  width: 4.5em;
+  flex: none;
+  background: var(--surface-container-high);
+  border: 1px solid var(--outline);
+  border-radius: 10px;
+  padding: 6px 8px;
+  font-size: 14px;
+  font-variant-numeric: tabular-nums;
+  color: var(--on-surface);
+  outline: none;
+}
+
+.converter-row select {
+  flex: 1;
+  min-width: 0;
+  background: var(--surface-container-high);
+  border: 1px solid var(--outline);
+  border-radius: 10px;
+  padding: 6px 8px;
+  font-size: 13px;
+  color: var(--on-surface);
+  outline: none;
+}
+
+.converter-result {
+  display: flex;
+  align-items: baseline;
+  gap: 6px;
+  font-size: 22px;
+  font-weight: 700;
+  font-variant-numeric: tabular-nums;
+  color: var(--primary-strong);
+  /* Long results shouldn't push the card wider than the rail. */
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.converter-unit {
+  font-size: 13px;
+  font-weight: 600;
+  color: var(--on-surface-variant);
+}
+
+/* ---------- Seven-segment ---------- */
+/* Drawn as elements rather than set in a font, so the unlit segments can stay
+   faintly visible — that ghosting is what makes it read as an LCD instead of
+   just blocky text. */
+.clock-segment {
+  display: inline-flex;
+  align-items: center;
+  gap: calc(var(--clock-size) * 0.14);
+  --seg-w: calc(var(--clock-size) * 0.46);
+  --seg-h: calc(var(--clock-size) * 0.86);
+  --seg-t: calc(var(--clock-size) * 0.075);
+}
+
+.seg-digit {
+  position: relative;
+  width: var(--seg-w);
+  height: var(--seg-h);
+}
+
+.seg {
+  position: absolute;
+  background: currentColor;
+  opacity: 0.09; /* the unlit ghost */
+  border-radius: calc(var(--seg-t) * 0.35);
+  transition: opacity 0.12s ease;
+}
+
+.seg.on {
+  opacity: 1;
+}
+
+/* Horizontals: top, middle, bottom. Inset by the stroke width at each end so
+   they meet the verticals in a mitre rather than overlapping them. */
+.seg-a,
+.seg-g,
+.seg-d {
+  left: var(--seg-t);
+  right: var(--seg-t);
+  height: var(--seg-t);
+}
+.seg-a { top: 0; }
+.seg-g { top: calc(50% - var(--seg-t) / 2); }
+.seg-d { bottom: 0; }
+
+/* Verticals: upper and lower on each side. */
+.seg-f,
+.seg-b,
+.seg-e,
+.seg-c {
+  width: var(--seg-t);
+}
+.seg-f, .seg-b { top: var(--seg-t); height: calc(50% - var(--seg-t) * 1.5); }
+.seg-e, .seg-c { bottom: var(--seg-t); height: calc(50% - var(--seg-t) * 1.5); }
+.seg-f, .seg-e { left: 0; }
+.seg-b, .seg-c { right: 0; }
+
+.seg-colon {
+  display: flex;
+  flex-direction: column;
+  justify-content: center;
+  gap: calc(var(--seg-h) * 0.22);
+  height: var(--seg-h);
+}
+
+.seg-colon i {
+  width: var(--seg-t);
+  height: var(--seg-t);
+  border-radius: 50%;
+  background: currentColor;
+}
+
+/* ---------- Dot matrix ---------- */
+.clock-dotmatrix {
+  display: inline-flex;
+  align-items: center;
+  gap: calc(var(--clock-size) * 0.1);
+  --dm-dot: calc(var(--clock-size) * 0.13);
+  --dm-gap: calc(var(--clock-size) * 0.035);
+}
+
+.dm-glyph {
+  display: grid;
+  grid-template-columns: repeat(3, var(--dm-dot));
+  gap: var(--dm-gap);
+}
+
+.dm-dot {
+  width: var(--dm-dot);
+  height: var(--dm-dot);
+  border-radius: 50%;
+  background: currentColor;
+  opacity: 0.1; /* unlit dots stay faintly there, as on real hardware */
+}
+
+.dm-dot.on {
+  opacity: 1;
+}
+
+/* The blinking colon dims rather than vanishing, so the spacing never jumps. */
+.dm-dim {
+  opacity: 0.25;
+  transition: opacity 0.2s ease;
+}
+
+/* ---------- Stacked ---------- */
+.clock-stack {
+  display: flex;
+  align-items: flex-end;
+  gap: calc(var(--clock-size) * 0.2);
+  text-align: left;
+}
+
+.stack-digits {
+  display: flex;
+  flex-direction: column;
+  line-height: 0.86;
+  font-size: calc(var(--clock-size) * 0.86);
+}
+
+.stack-side {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  padding-bottom: calc(var(--clock-size) * 0.1);
+  color: var(--on-bg, var(--on-surface-variant));
+  text-shadow: var(--on-bg-shadow, none);
+}
+
+.stack-suffix {
+  font-size: calc(var(--clock-size) * 0.16);
+  font-weight: 700;
+  letter-spacing: 0.1em;
+  color: var(--primary-strong);
+}
+
+.stack-day {
+  font-size: calc(var(--clock-size) * 0.19);
+  font-weight: 600;
+}
+
+.stack-date {
+  font-size: calc(var(--clock-size) * 0.15);
+  opacity: 0.7;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .seg,
+  .dm-dim {
+    transition: none;
+  }
+}
+
+/* ---------- Command bar ---------- */
+
+.command {
+  width: min(620px, 100%);
+  display: flex;
+  flex-direction: column;
+  border-radius: var(--radius-card, 20px);
+  background: color-mix(in srgb, var(--surface-container) var(--card-opacity, 70%), transparent);
+  border: 1px solid color-mix(in srgb, var(--on-surface) 12%, transparent);
+  box-shadow: var(--shadow-card);
+  transition: border-color 0.18s ease, box-shadow 0.18s ease;
+}
+
+.app.glass .command {
+  backdrop-filter: blur(22px) saturate(150%);
+  -webkit-backdrop-filter: blur(22px) saturate(150%);
+}
+
+.command:focus-within {
+  border-color: color-mix(in srgb, var(--primary) 55%, transparent);
+}
+
+/* Square off the join where the results list meets the input. */
+.command.has-results {
+  border-bottom-left-radius: 14px;
+  border-bottom-right-radius: 14px;
+}
+
+.command-input-row {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  padding: 12px 14px;
+}
+
+.command-input {
+  flex: 1;
+  min-width: 0;
+  background: transparent;
+  border: none;
+  outline: none;
+  font-size: 16px;
+  color: var(--on-surface);
+}
+
+.command-input::placeholder {
+  color: var(--on-surface-variant);
+}
+
+/* The locked-in search reads as a token in front of the box, so it is obvious
+   that what you type next goes to that site rather than the web. */
+.command-lock {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  flex: none;
+  padding: 4px 10px;
+  border-radius: var(--radius-pill);
+  background: var(--primary);
+  color: var(--surface);
+  font-size: 13px;
+  font-weight: 600;
+  white-space: nowrap;
+}
+
+.command .crumb {
+  flex: none;
+  padding: 4px 10px;
+  border-radius: var(--radius-pill);
+  background: var(--surface-container-high);
+  color: var(--on-surface-variant);
+  font-size: 13px;
+  white-space: nowrap;
+}
+
+.command .crumb:hover {
+  color: var(--on-surface);
+}
+
+.command-results {
+  list-style: none;
+  margin: 0;
+  padding: 6px;
+  border-top: 1px solid color-mix(in srgb, var(--on-surface) 10%, transparent);
+  max-height: min(46vh, 420px);
+  overflow-y: auto;
+  scrollbar-width: thin;
+}
+
+.command-result {
+  width: 100%;
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  padding: 8px 10px;
+  border-radius: 12px;
+  text-align: left;
+  color: var(--on-surface);
+}
+
+/* One highlight, driven by both mouse and keyboard, so Enter never opens
+   something other than what looks selected. */
+.command-result.is-cursor {
+  background: var(--surface-container-high);
+}
+
+.command-result svg,
+.command-result .favicon-img {
+  width: 20px;
+  height: 20px;
+  flex: none;
+}
+
+.command-result .monogram {
+  font-size: 15px;
+  font-weight: 700;
+}
+
+.command-result-text {
+  flex: 1;
+  min-width: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 1px;
+}
+
+.command-result-title,
+.command-result-sub {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.command-result-title {
+  font-size: 14px;
+}
+
+.command-result-sub {
+  font-size: 12px;
+  color: var(--on-surface-variant);
+}
+
+/* In a result row the badge is a static chip, not a corner sticker. */
+.command-result .key-badge {
+  position: static;
+  height: 18px;
+  min-width: 18px;
+}
+
+/* ---------- Keyboard launcher ---------- */
+
+/* The key badge sits on the tile rather than beside it, so turning hints on
+   doesn't reflow the dock — it only tints a corner. Muted by default and lit
+   by the accent on hover, so a wall of badges never shouts. */
+.key-badge {
+  position: absolute;
+  right: -3px;
+  bottom: -3px;
+  min-width: 17px;
+  height: 17px;
+  padding: 0 4px;
+  border-radius: var(--radius-pill);
+  display: grid;
+  place-items: center;
+  background: var(--surface-container-high);
+  color: var(--on-surface-variant);
+  border: 1px solid color-mix(in srgb, var(--on-surface) 10%, transparent);
+  font-size: 10px;
+  font-weight: 700;
+  line-height: 1;
+  /* Case matters, so never let the font or a stylesheet fold it. */
+  text-transform: none;
+  font-variant: normal;
+  pointer-events: none;
+  transition: background 0.18s ease, color 0.18s ease;
+}
+
+.dock a:hover .key-badge {
+  background: var(--primary);
+  color: var(--surface);
+}
+
+/* Folders and searches read as containers, not destinations. */
+.dock a.is-folder,
+.dock a.is-search {
+  background: var(--surface-container-high);
+}
+
+/* Breadcrumb + term box. Sits just above the dock and only exists once the
+   user has stepped into a folder or locked a search — at rest the new tab is
+   exactly as bare as it was before. */
+.launcher-bar {
+  position: absolute;
+  bottom: 100px;
+  left: 50%;
+  transform: translateX(-50%);
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  max-width: min(560px, 90vw);
+  padding: 6px 8px;
+  border-radius: var(--radius-pill);
+  background: color-mix(in srgb, var(--surface-container) var(--card-opacity, 70%), transparent);
+  box-shadow: var(--shadow-card);
+  font-size: 13px;
+  animation: launcher-in 0.18s cubic-bezier(0.2, 0.7, 0.2, 1);
+}
+
+@keyframes launcher-in {
+  from {
+    opacity: 0;
+    transform: translateX(-50%) translateY(4px);
+  }
+}
+
+.crumb-root,
+.crumb {
+  padding: 3px 10px;
+  border-radius: var(--radius-pill);
+  color: var(--on-surface-variant);
+  white-space: nowrap;
+}
+
+.crumb-root:hover {
+  background: var(--surface-container-high);
+  color: var(--on-surface);
+}
+
+.crumb.is-search {
+  background: var(--primary);
+  color: var(--surface);
+  font-weight: 600;
+}
+
+.launcher-term {
+  flex: 1;
+  min-width: 140px;
+  padding: 3px 6px;
+  border: none;
+  background: transparent;
+  color: var(--on-surface);
+  font: inherit;
+  outline: none;
+}
+
+.launcher-term::placeholder {
+  color: var(--on-surface-variant);
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .launcher-bar {
+    animation: none;
+  }
+}
+
+/* The Alt+K overlay reuses the dock and the launcher bar, but it is a small
+   framed panel rather than a full page — so both are un-anchored and stacked
+   in normal flow here. */
+.launcher-page {
+  height: 100%;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 18px;
+  padding: 24px;
+  background: var(--surface);
+  border-radius: 18px;
+}
+
+.launcher-page .dock,
+.launcher-page .launcher-bar {
+  position: static;
+  transform: none;
+  flex-wrap: wrap;
+  justify-content: center;
+}
+
+.launcher-page .dock {
+  gap: 16px;
+}
+
+.launcher-hint {
+  color: var(--on-surface-variant);
+  font-size: 12px;
+  text-align: center;
+}
+
 /* ---------- Corner buttons ---------- */
 .corner-btn {
   position: absolute;
@@ -598,6 +1469,22 @@ select {
   background: var(--surface-container-high);
   color: var(--primary);
   transform: scale(1.1);
+}
+
+/* Minimal mode hides every control but this one, which stays invisible until
+   the pointer moves — so the mode is quiet, but never a one-way door. */
+.corner-btn.peek {
+  opacity: 0;
+  transition: opacity 0.4s ease;
+}
+
+.app:hover .corner-btn.peek,
+.corner-btn.peek:focus-visible {
+  opacity: 0.5;
+}
+
+.corner-btn.peek:hover {
+  opacity: 1;
 }
 
 .corner-btn:active {
@@ -688,9 +1575,7 @@ select {
 }
 
 .app.glass .appearance-switch {
-  background: color-mix(in srgb, var(--surface-container) 45%, transparent);
-  backdrop-filter: blur(14px) saturate(150%);
-  -webkit-backdrop-filter: blur(14px) saturate(150%);
+  background: color-mix(in srgb, var(--surface-container) 65%, transparent);
 }
 
 .appearance-switch .end-icon {
@@ -919,40 +1804,138 @@ select {
 }
 
 /* ---------- Settings: tabs, segments, pickers ---------- */
+/* Settings carries far more than the other panels, so it is a two-pane dialog
+   rather than one long scroll: heading across the top, section list down the
+   left, and only the content pane scrolling. */
 .settings-panel {
-  width: min(380px, 94vw);
+  width: min(680px, 94vw);
+  max-height: min(82vh, 760px);
+  display: grid;
+  grid-template-columns: 132px minmax(0, 1fr);
+  grid-template-rows: auto minmax(0, 1fr);
+  grid-template-areas:
+    'head head'
+    'nav  body';
+  gap: 14px 18px;
+  overflow: hidden; /* the body pane scrolls instead */
 }
 
-.tab-bar {
+.settings-panel > .row.between {
+  grid-area: head;
+}
+
+.settings-nav {
+  grid-area: nav;
   display: flex;
-  gap: 4px;
-  padding: 4px;
-  background: var(--surface-container);
-  border-radius: 999px;
+  flex-direction: column;
+  gap: 2px;
+  padding-right: 14px;
+  border-right: 1px solid color-mix(in srgb, var(--on-surface) 10%, transparent);
+  overflow-y: auto;
+  scrollbar-width: none;
 }
 
-.tab-btn {
-  flex: 1;
-  border: none;
-  background: transparent;
+.settings-nav-btn {
+  text-align: left;
+  padding: 8px 12px;
+  border-radius: 10px;
+  font-size: 14px;
   color: var(--on-surface-variant);
-  font: inherit;
-  font-size: 12.5px;
-  font-weight: 600;
-  padding: 7px 2px;
-  border-radius: 999px;
-  cursor: pointer;
-  transition: background-color 0.18s ease, color 0.18s ease;
+  white-space: nowrap;
+  transition: background 0.14s ease, color 0.14s ease;
 }
 
-.tab-btn.on {
-  background: var(--primary);
-  color: var(--bg);
-}
-
-.tab-btn:not(.on):hover {
+.settings-nav-btn:hover {
+  background: var(--surface-container);
   color: var(--on-surface);
 }
+
+.settings-nav-btn.on {
+  background: var(--primary);
+  color: var(--surface);
+  font-weight: 600;
+}
+
+.settings-body {
+  grid-area: body;
+  min-width: 0;
+  overflow-y: auto;
+  scrollbar-width: thin;
+  padding-right: 4px;
+  display: flex;
+  flex-direction: column;
+  gap: 16px;
+}
+
+/* Narrow windows can't spare 132px for a sidebar, so it becomes a scrolling
+   strip above the content again. */
+@media (max-width: 620px) {
+  .settings-panel {
+    grid-template-columns: minmax(0, 1fr);
+    grid-template-areas:
+      'head'
+      'nav'
+      'body';
+    grid-template-rows: auto auto minmax(0, 1fr);
+  }
+
+  .settings-nav {
+    flex-direction: row;
+    overflow-x: auto;
+    padding-right: 0;
+    padding-bottom: 10px;
+    border-right: none;
+    border-bottom: 1px solid color-mix(in srgb, var(--on-surface) 10%, transparent);
+  }
+}
+
+/* ---------- Shortcut cards ---------- */
+/* One shortcut used to be a single row of eight controls, which did not fit.
+   Now it is a small card: what it is on top, how it looks and where it lives
+   underneath. */
+.link-card {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  padding: 10px;
+  border-radius: 14px;
+  background: var(--surface-container);
+}
+
+.link-card.is-folder {
+  background: var(--surface-container-high);
+}
+
+/* Keyboard-only entries are dimmed so it reads at a glance which shortcuts
+   are actually drawn on the page. */
+.link-card.is-hidden .link-name,
+.link-card.is-hidden .link-name-input {
+  opacity: 0.6;
+}
+
+/* Nested shortcuts are indented and share a rule with their folder, so the
+   grouping reads without needing a tree widget. */
+.link-card.is-nested {
+  margin-left: 16px;
+  border-left: 2px solid color-mix(in srgb, var(--primary) 40%, transparent);
+  border-top-left-radius: 6px;
+  border-bottom-left-radius: 6px;
+}
+
+.link-card-main,
+.link-card-meta {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.link-card-meta {
+  flex-wrap: wrap;
+}
+
+
+
+
 
 .seg-row {
   display: flex;
@@ -1201,11 +2184,6 @@ select {
 }
 
 /* Quick-link customization */
-.link-row {
-  align-items: center;
-  gap: 8px;
-  padding: 4px 0;
-}
 
 .link-icon-input {
   width: 40px;
@@ -1231,11 +2209,99 @@ select {
 
 .link-name {
   flex: 1;
-  color: var(--on-surface-variant);
+  min-width: 0;
+  color: var(--on-surface);
   font-size: 14px;
   overflow: hidden;
   text-overflow: ellipsis;
   white-space: nowrap;
+}
+
+/* The key gets a proper labelled control: it is the thing you actually press,
+   so it should not be the smallest box in the card. */
+.link-key {
+  flex: none;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 3px;
+  cursor: text;
+}
+
+.link-key-input {
+  width: 52px;
+  height: 40px;
+  text-align: center;
+  background: var(--surface-container-high);
+  border: 1px solid var(--outline);
+  border-radius: 12px;
+  padding: 0;
+  font-size: 18px;
+  font-weight: 700;
+  line-height: 1;
+  color: var(--on-surface);
+  outline: none;
+  /* The key is case-sensitive, so the field must never normalise it. */
+  text-transform: none;
+  transition: border-color 0.14s ease;
+}
+
+.link-key-input:focus {
+  border-color: var(--primary-strong);
+}
+
+.link-key-caption {
+  font-size: 10px;
+  letter-spacing: 0.6px;
+  text-transform: uppercase;
+  color: var(--on-surface-variant);
+}
+
+/* A duplicate key silently shadows one of the two items — worth calling out. */
+.link-key-input.is-clash,
+.link-key-caption.is-clash {
+  border-color: var(--error, #e5484d);
+  color: var(--error, #e5484d);
+}
+
+.link-name-input {
+  flex: 1;
+  min-width: 0;
+  background: transparent;
+  border: none;
+  border-bottom: 1px solid var(--outline);
+  padding: 4px 2px;
+  color: var(--on-surface);
+  font-size: 14px;
+  outline: none;
+}
+
+.link-parent-select {
+  max-width: 150px;
+  background: var(--surface-container-high);
+  border: 1px solid var(--outline);
+  border-radius: 10px;
+  padding: 4px 6px;
+  color: var(--on-surface-variant);
+  font-size: 12px;
+  outline: none;
+}
+
+.link-search-input {
+  width: 100%;
+  margin: 2px 0 6px;
+  background: var(--surface-container-high);
+  border: 1px solid var(--outline);
+  border-radius: 10px;
+  padding: 6px 9px;
+  color: var(--on-surface);
+  font-size: 12px;
+  font-family: ui-monospace, SFMono-Regular, Menlo, monospace;
+  outline: none;
+}
+
+.btn-ghost.is-active {
+  color: var(--primary);
 }
 
 .dock-emoji {
@@ -1246,6 +2312,7 @@ select {
 /* Ambient screensaver */
 .right-col,
 .dock,
+.command,
 .corner-btn,
 .appearance-switch {
   transition: opacity 1s ease;
@@ -1253,13 +2320,16 @@ select {
 
 .app.ambient .right-col,
 .app.ambient .dock,
+.app.ambient .command,
 .app.ambient .corner-btn,
 .app.ambient .appearance-switch {
   opacity: 0;
   pointer-events: none;
 }
 
-.app.ambient .hero {
+/* Selector kept at least as specific as the entrance rule on `.main-col > .hero`
+   above, or the (filled) entrance animation would hold the hero still. */
+.app.ambient .main-col > .hero {
   animation: ambient-drift 120s ease-in-out infinite alternate;
 }
 
@@ -1531,9 +2601,11 @@ select {
 }
 
 .app.glass .flip-card {
-  background: color-mix(in srgb, var(--surface-container-high) var(--card-opacity, 70%), transparent);
-  backdrop-filter: blur(18px) saturate(140%);
-  -webkit-backdrop-filter: blur(18px) saturate(140%);
+  background: color-mix(
+    in srgb,
+    var(--surface-container-high) calc(var(--card-opacity, 70%) + 15%),
+    transparent
+  );
 }
 
 .flip-digit {
@@ -2234,15 +3306,6 @@ body {
   }
 }
 
-.widget-slot:nth-child(1) { animation-delay:   0ms; }
-.widget-slot:nth-child(2) { animation-delay:  55ms; }
-.widget-slot:nth-child(3) { animation-delay: 110ms; }
-.widget-slot:nth-child(4) { animation-delay: 165ms; }
-.widget-slot:nth-child(5) { animation-delay: 220ms; }
-.widget-slot:nth-child(6) { animation-delay: 275ms; }
-.widget-slot:nth-child(7) { animation-delay: 330ms; }
-.widget-slot:nth-child(8) { animation-delay: 385ms; }
-
 /* ---------- Responsive: stack into one centered column on narrow/portrait ----------
    Placed last so it overrides the wide two-column base layout in the cascade. */
 @media (max-width: 1100px), (orientation: portrait) {
@@ -2301,5 +3364,30 @@ body {
   .scrim,
   .panel {
     position: fixed;
+  }
+}
+
+
+/* ---------- Narrow windows ---------- */
+/* Below this width the two columns would each be too thin to use, so the
+   widget rail moves under the launcher and the page scrolls instead. */
+@media (max-width: 900px) {
+  .app {
+    flex-direction: column;
+    overflow-y: auto;
+  }
+
+  .main-col {
+    padding: 84px 20px 20px;
+  }
+
+  .right-col {
+    margin: 0 auto 28px;
+    width: min(440px, calc(100vw - 40px));
+    overflow: visible;
+  }
+
+  .dock.as-grid {
+    max-width: 100%;
   }
 }

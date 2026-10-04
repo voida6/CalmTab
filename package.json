@@ -1,13 +1,16 @@
 {
   "name": "calmtab",
   "private": true,
-  "version": "0.5.0",
+  "version": "0.6.0",
   "type": "module",
   "description": "A calm, customizable Material You new-tab dashboard.",
   "scripts": {
     "dev": "vite",
-    "build": "tsc --noEmit && vite build",
-    "preview": "vite preview"
+    "build": "tsc --noEmit && vite build && node scripts/pack.mjs",
+    "build:chrome": "tsc --noEmit && vite build && node scripts/pack.mjs chrome",
+    "build:firefox": "tsc --noEmit && vite build && node scripts/pack.mjs firefox",
+    "preview": "vite preview",
+    "test": "node --experimental-strip-types --test src/lib/*.test.ts"
   },
   "dependencies": {
     "@fontsource/nunito": "^5.2.7",

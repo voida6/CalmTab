@@ -4,7 +4,9 @@ import type {
   CardShape,
   ClockStyle,
   ColorMode,
+  ChromeLevel,
   IconStyle,
+  LauncherFocus,
   LinkItem,
   Settings,
   ThemeName,
@@ -23,7 +25,15 @@ import { Clock } from './Clock'
 import { AnalogClock } from './AnalogClock'
 import { WordClock } from './WordClock'
 import { FlipClock } from './FlipClock'
-import { PlusIcon, XIcon } from './Icons'
+import { TerminalClock } from './TerminalClock'
+import { BinaryClock } from './BinaryClock'
+import { RomanClock } from './RomanClock'
+import { ProgressClock } from './ProgressClock'
+import { SegmentClock } from './SegmentClock'
+import { DotMatrixClock } from './DotMatrixClock'
+import { StackClock } from './StackClock'
+import { PlusIcon, SearchIcon, XIcon } from './Icons'
+import { clashingSlots, isKeyChar, slotId, suggestKey, takenKeys } from '../lib/keynav'
 
 interface Props {
   settings: Settings
@@ -35,13 +45,15 @@ interface Props {
   onClose: () => void
 }
 
-type Tab = 'style' | 'wall' | 'clock' | 'widgets' | 'links' | 'about'
+type Tab = 'style' | 'wall' | 'clock' | 'size' | 'widgets' | 'keys' | 'links' | 'about'
 
 const TABS: { id: Tab; label: string }[] = [
   { id: 'style', label: 'Style' },
   { id: 'wall', label: 'Wallpaper' },
   { id: 'clock', label: 'Clock' },
+  { id: 'size', label: 'Size' },
   { id: 'widgets', label: 'Widgets' },
+  { id: 'keys', label: 'Keys' },
   { id: 'links', label: 'Links' },
   { id: 'about', label: 'More' },
 ]
@@ -55,6 +67,17 @@ const PALETTE_STYLES: { id: PaletteStyle; label: string }[] = [
   { id: 'fidelity', label: 'Fidelity' },
   { id: 'mono', label: 'Mono' },
 ]
+
+/** A starting point for a search template, so switching a link to "search"
+ *  leaves something editable rather than an empty box. Most sites answer to
+ *  `?q=`; the ones that don't only need the tail corrected. */
+function guessTemplate(url: string): string {
+  try {
+    return `${new URL(url).origin}/search?q=%s`
+  } catch {
+    return ''
+  }
+}
 
 // Everything included in a backup file (wallpaper media excluded — too big).
 const BACKUP_KEYS = ['settings', 'links', 'widgetOrder', 'todos', 'habits', 'notes', 'focus', 'searchEngine']
@@ -76,6 +99,13 @@ const CLOCKS: { id: ClockStyle; label: string }[] = [
   { id: 'analogClassic', label: 'Classic' },
   { id: 'word', label: 'Word' },
   { id: 'flip', label: 'Flip' },
+  { id: 'terminal', label: 'Terminal' },
+  { id: 'binary', label: 'Binary' },
+  { id: 'roman', label: 'Roman' },
+  { id: 'progress', label: 'Progress' },
+  { id: 'segment', label: 'Segment' },
+  { id: 'dotmatrix', label: 'Dot matrix' },
+  { id: 'stack', label: 'Stacked' },
 ]
 
 // Scale factor per style so each live preview fits its chip.
@@ -86,6 +116,13 @@ const PREVIEW_SCALE: Record<ClockStyle, string> = {
   analogClassic: '0.3',
   word: '0.34',
   flip: '0.2',
+  terminal: '0.18',
+  binary: '0.55',
+  roman: '0.3',
+  progress: '0.3',
+  segment: '0.42',
+  dotmatrix: '0.5',
+  stack: '0.3',
 }
 
 function clockPreview(style: ClockStyle, hour12: boolean) {
@@ -98,6 +135,20 @@ function clockPreview(style: ClockStyle, hour12: boolean) {
       return <WordClock />
     case 'flip':
       return <FlipClock hour12={hour12} />
+    case 'terminal':
+      return <TerminalClock hour12={hour12} />
+    case 'binary':
+      return <BinaryClock hour12={hour12} />
+    case 'roman':
+      return <RomanClock hour12={hour12} />
+    case 'progress':
+      return <ProgressClock hour12={hour12} />
+    case 'segment':
+      return <SegmentClock hour12={hour12} showSeconds={false} />
+    case 'dotmatrix':
+      return <DotMatrixClock hour12={hour12} />
+    case 'stack':
+      return <StackClock hour12={hour12} />
     case 'minimal':
       return <Clock hour12={hour12} showSeconds={false} />
     default:
@@ -120,10 +171,44 @@ const WIDGETS: { key: keyof WidgetToggles; label: string }[] = [
   { key: 'quickTimer', label: 'Timer' },
   { key: 'habits', label: 'Habits' },
   { key: 'ticker', label: 'Crypto ticker' },
-  { key: 'search', label: 'Search bar' },
   { key: 'quote', label: 'Daily quote' },
   { key: 'notes', label: 'Notes' },
-  { key: 'dock', label: 'Quick links' },
+  { key: 'calendar', label: 'Calendar' },
+  { key: 'world', label: 'World clocks' },
+  { key: 'converter', label: 'Converter' },
+  { key: 'dock', label: 'Shortcut grid' },
+]
+
+const FOCUS_MODES: { id: LauncherFocus; label: string; hint: string }[] = [
+  {
+    id: 'browser',
+    label: 'Address bar',
+    hint: 'Behaves like a normal new tab. Press Esc to hand the keyboard to CalmTab.',
+  },
+  {
+    id: 'page',
+    label: 'The page',
+    hint: 'Keys jump straight away; typing an unassigned key starts a search. Firefox and Zen may still keep the address bar focused — that is the browser’s call, not CalmTab’s.',
+  },
+  {
+    id: 'search',
+    label: 'Search box',
+    hint: 'The caret waits in CalmTab’s search box, so typing goes there instead of the address bar. A key still jumps while the box is empty.',
+  },
+]
+
+const CHROME_LEVELS: { id: ChromeLevel; label: string; hint: string }[] = [
+  { id: 'full', label: 'Everything', hint: 'Widgets, shortcut grid and corner buttons.' },
+  {
+    id: 'minimal',
+    label: 'Minimal',
+    hint: 'The clock and the launcher only — no widgets, no grid, no buttons.',
+  },
+  {
+    id: 'bare',
+    label: 'Nothing',
+    hint: 'A bare wallpaper. Move the mouse or start typing and the launcher appears; it fades away again when you stop.',
+  },
 ]
 
 const MAX_VIDEO_MB = 80
@@ -187,15 +272,51 @@ export function SettingsPanel({ settings, setSettings, links, setLinks, wallpape
     void setItem('wallpaperMedia', null)
   }
 
-  const addLink = () => {
+  const folders = links.filter((l) => l.folder)
+  const clashes = clashingSlots(links)
+
+  const updateLink = (id: string, patch: Partial<LinkItem>) =>
+    setLinks((prev) => prev.map((x) => (x.id === id ? { ...x, ...patch } : x)))
+
+  /** Removing a folder promotes its contents to the top level rather than
+   *  deleting them — losing shortcuts to a mis-click would be unforgiving. */
+  const removeLink = (id: string) =>
+    setLinks((prev) =>
+      prev
+        .filter((x) => x.id !== id)
+        .map((x) => (x.parentId === id ? { ...x, parentId: undefined } : x)),
+    )
+
+  const addLink = (hidden = false) => {
     const name = linkName.trim()
     let url = linkUrl.trim()
     if (!name || !url) return
     if (!/^https?:\/\//.test(url)) url = 'https://' + url
-    setLinks((prev) => [...prev, { id: uid(), name, url }])
+    setLinks((prev) => [
+      ...prev,
+      {
+        id: uid(),
+        name,
+        url,
+        key: suggestKey(name, takenKeys(prev, undefined)),
+        ...(hidden ? { hidden: true } : {}),
+      },
+    ])
     setLinkName('')
     setLinkUrl('')
   }
+
+  const addFolder = () =>
+    setLinks((prev) => [
+      ...prev,
+      {
+        id: uid(),
+        name: 'New folder',
+        url: '',
+        folder: true,
+        key: suggestKey('folder', takenKeys(prev, undefined)),
+      },
+    ])
 
   const exportBackup = async () => {
     const data: Record<string, unknown> = { _calmtab: 1, exportedAt: new Date().toISOString() }
@@ -252,20 +373,23 @@ export function SettingsPanel({ settings, setSettings, links, setLinks, wallpape
           </button>
         </div>
 
-        <div className="tab-bar" role="tablist">
+        <nav className="settings-nav" role="tablist" aria-label="Settings sections">
           {TABS.map((t) => (
             <button
               key={t.id}
               role="tab"
               aria-selected={tab === t.id}
-              className={`tab-btn ${tab === t.id ? 'on' : ''}`}
+              className={`settings-nav-btn ${tab === t.id ? 'on' : ''}`}
               onClick={() => setTab(t.id)}
             >
               {t.label}
             </button>
           ))}
-        </div>
+        </nav>
 
+        {/* Only this pane scrolls, so the heading and the section list stay
+            put however long a section gets. */}
+        <div className="settings-body" role="tabpanel">
         {/* ================= STYLE ================= */}
         {tab === 'style' && (
           <>
@@ -540,7 +664,9 @@ export function SettingsPanel({ settings, setSettings, links, setLinks, wallpape
                 ))}
               </div>
             </div>
-            {['digital', 'minimal', 'flip'].includes(settings.clockStyle) && (
+            {['digital', 'minimal', 'flip', 'terminal', 'binary', 'roman', 'progress', 'segment', 'dotmatrix', 'stack'].includes(
+              settings.clockStyle,
+            ) && (
               <div className="row between" style={{ padding: '2px 0' }}>
                 <span>12-hour (AM/PM)</span>
                 <button
@@ -569,10 +695,143 @@ export function SettingsPanel({ settings, setSettings, links, setLinks, wallpape
           </>
         )}
 
+        {/* ================= SIZE ================= */}
+        {tab === 'size' && (
+          <>
+            <div className="field">
+              <label>Everything ({settings.uiScale}%)</label>
+              <input
+                type="range"
+                min={70}
+                max={140}
+                step={5}
+                value={settings.uiScale}
+                onChange={(e) => patch({ uiScale: Number(e.target.value) })}
+              />
+              <span className="muted">
+                Scales the whole page together — clock, launcher, tiles and widgets.
+              </span>
+            </div>
+
+            <div className="field">
+              <label>Clock ({settings.clockScale}%)</label>
+              <input
+                type="range"
+                min={50}
+                max={180}
+                step={5}
+                value={settings.clockScale}
+                onChange={(e) => patch({ clockScale: Number(e.target.value) })}
+              />
+              <span className="muted">
+                Applied on top of the overall scale, so you can have a big clock with small
+                everything else.
+              </span>
+            </div>
+
+            <div className="field">
+              <button
+                className="btn-ghost"
+                onClick={() => patch({ uiScale: 100, clockScale: 100 })}
+                disabled={settings.uiScale === 100 && settings.clockScale === 100}
+              >
+                Reset both to 100%
+              </button>
+            </div>
+          </>
+        )}
+
+        {/* ================= KEYS ================= */}
+        {tab === 'keys' && (
+          <>
+            <div className="field">
+              <label>Single-key jumping</label>
+              <div className="row between" style={{ padding: '2px 0' }}>
+                <span>Jump with a single key</span>
+                <button
+                  className={`toggle ${settings.keyNav ? 'on' : ''}`}
+                  onClick={() => patch({ keyNav: !settings.keyNav })}
+                  aria-label="Toggle single-key jumping"
+                />
+              </div>
+              <div className="row between" style={{ padding: '2px 0' }}>
+                <span>Show keys on tiles</span>
+                <button
+                  className={`toggle ${settings.keyHints ? 'on' : ''}`}
+                  onClick={() => patch({ keyHints: !settings.keyHints })}
+                  aria-label="Toggle key hints"
+                  disabled={!settings.keyNav}
+                />
+              </div>
+              <span className="muted">
+                Press a key to open its link. <kbd>Alt</kbd> + key opens a new tab, <kbd>Esc</kbd> steps
+                back out of a folder or search, and any unassigned key starts a search.
+              </span>
+            </div>
+
+            <div className="field">
+              <label>When a new tab opens</label>
+              <div className="seg-row">
+                {FOCUS_MODES.map((f) => (
+                  <button
+                    key={f.id}
+                    className={`seg-btn ${settings.launcherFocus === f.id ? 'on' : ''}`}
+                    onClick={() => patch({ launcherFocus: f.id })}
+                    title={f.hint}
+                  >
+                    {f.label}
+                  </button>
+                ))}
+              </div>
+              <span className="muted">
+                {FOCUS_MODES.find((f) => f.id === settings.launcherFocus)?.hint}
+              </span>
+            </div>
+          </>
+        )}
+
         {/* ================= WIDGETS ================= */}
         {tab === 'widgets' && (
           <>
-            <div className="row between" style={{ padding: '2px 0' }}>
+            <div className="field">
+              <label>How much to show</label>
+              <div className="seg-row">
+                {CHROME_LEVELS.map((c) => (
+                  <button
+                    key={c.id}
+                    className={`seg-btn ${settings.chrome === c.id ? 'on' : ''}`}
+                    onClick={() => patch({ chrome: c.id })}
+                    title={c.hint}
+                  >
+                    {c.label}
+                  </button>
+                ))}
+              </div>
+              <span className="muted">
+                {CHROME_LEVELS.find((c) => c.id === settings.chrome)?.hint} However far you strip
+                it back, <kbd>Ctrl</kbd> + <kbd>,</kbd> always opens this panel.
+              </span>
+            </div>
+
+            <div className="field">
+              <div className="row between" style={{ padding: '2px 0' }}>
+                <span>Reduce effects</span>
+                <button
+                  className={`toggle ${settings.reduceEffects ? 'on' : ''}`}
+                  onClick={() => patch({ reduceEffects: !settings.reduceEffects })}
+                  aria-label="Toggle reduced effects"
+                />
+              </div>
+              <span className="muted">
+                Turns off the frosted-glass blur behind cards and panels. It is by far the most
+                expensive thing on the page — worth trying if anything feels sluggish.
+              </span>
+            </div>
+
+            <div
+              className="row between"
+              style={{ padding: '2px 0', opacity: settings.chrome === 'full' ? 1 : 0.4 }}
+            >
               <span>Compact mode</span>
               <button
                 className={`toggle ${settings.compactWidgets ? 'on' : ''}`}
@@ -661,64 +920,208 @@ export function SettingsPanel({ settings, setSettings, links, setLinks, wallpape
 
         {/* ================= LINKS ================= */}
         {tab === 'links' && (
-          <div className="field">
-            <label>Quick links</label>
-            <span className="muted">Give any link its own emoji or tint.</span>
-            {links.map((l) => (
-              <div key={l.id} className="row link-row">
-                <input
-                  className="link-icon-input"
-                  maxLength={2}
-                  placeholder="✦"
-                  value={l.icon ?? ''}
-                  title="Custom emoji/character"
-                  onChange={(e) =>
-                    setLinks((prev) =>
-                      prev.map((x) => (x.id === l.id ? { ...x, icon: e.target.value || undefined } : x)),
-                    )
-                  }
-                />
-                <input
-                  type="color"
-                  className="link-color-input"
-                  value={l.color ?? '#8b8b95'}
-                  title="Custom tint"
-                  onChange={(e) =>
-                    setLinks((prev) => prev.map((x) => (x.id === l.id ? { ...x, color: e.target.value } : x)))
-                  }
-                />
-                <span className="link-name">{l.name}</span>
-                {(l.color || l.icon) && (
-                  <button
-                    className="btn-ghost"
-                    title="Reset custom style"
-                    aria-label={`Reset style for ${l.name}`}
-                    onClick={() =>
-                      setLinks((prev) =>
-                        prev.map((x) => (x.id === l.id ? { ...x, color: undefined, icon: undefined } : x)),
-                      )
-                    }
+          <>
+            <div className="field">
+              <label>Quick links</label>
+              <span className="muted">
+                Keys are case-sensitive, so <kbd>m</kbd> and <kbd>M</kbd> are two different slots.
+              </span>
+
+              {links.map((l) => {
+                const clash = !!l.key && clashes.has(slotId(l))
+                const styled = !!(l.color || l.icon)
+                return (
+                  <div
+                    key={l.id}
+                    className={`link-card${l.parentId ? ' is-nested' : ''}${l.folder ? ' is-folder' : ''}${l.hidden ? ' is-hidden' : ''}`}
                   >
-                    ↺
-                  </button>
-                )}
-                <button
-                  className="btn-ghost"
-                  onClick={() => setLinks((prev) => prev.filter((x) => x.id !== l.id))}
-                  aria-label={`Remove ${l.name}`}
-                >
-                  <XIcon />
+                    {/* Line one: what it is. */}
+                    <div className="link-card-main">
+                      {/* The key is the whole point of a shortcut now, so it
+                          gets a labelled control of its own rather than a
+                          cramped box wedged against the name. */}
+                      <label className="link-key">
+                        <input
+                          className={`link-key-input${clash ? ' is-clash' : ''}`}
+                          maxLength={1}
+                          placeholder="–"
+                          value={l.key ?? ''}
+                          aria-label={`Key for ${l.name}`}
+                          onChange={(e) => {
+                            const key = e.target.value
+                            // Silently drop punctuation rather than showing an
+                            // error for a keystroke the launcher can't bind.
+                            if (key && !isKeyChar(key)) return
+                            updateLink(l.id, { key: key || undefined })
+                          }}
+                        />
+                        <span className={`link-key-caption${clash ? ' is-clash' : ''}`}>
+                          {clash ? 'taken' : 'key'}
+                        </span>
+                      </label>
+
+                      {l.folder ? (
+                        // Folders arrive named "New folder", so the name has
+                        // to be editable right where it is created.
+                        <input
+                          className="link-name-input"
+                          value={l.name}
+                          aria-label="Folder name"
+                          onChange={(e) => updateLink(l.id, { name: e.target.value })}
+                        />
+                      ) : (
+                        <span className="link-name" title={l.url}>
+                          {l.name}
+                        </span>
+                      )}
+
+                      <button
+                        className="btn-ghost"
+                        onClick={() => removeLink(l.id)}
+                        aria-label={l.folder ? `Remove the ${l.name} folder` : `Remove ${l.name}`}
+                        title={l.folder ? 'Remove the folder (its links move to the top level)' : 'Remove'}
+                      >
+                        <XIcon />
+                      </button>
+                    </div>
+
+                    {/* Line two: how it looks and where it lives. Folders have
+                        no URL, so they get no search option. */}
+                    <div className="link-card-meta">
+                      <input
+                        className="link-icon-input"
+                        maxLength={2}
+                        placeholder="✦"
+                        value={l.icon ?? ''}
+                        title="Custom emoji or character"
+                        aria-label={`Icon for ${l.name}`}
+                        onChange={(e) => updateLink(l.id, { icon: e.target.value || undefined })}
+                      />
+                      <input
+                        type="color"
+                        className="link-color-input"
+                        value={l.color ?? '#8b8b95'}
+                        title="Custom tint"
+                        aria-label={`Tint for ${l.name}`}
+                        onChange={(e) => updateLink(l.id, { color: e.target.value })}
+                      />
+                      {styled && (
+                        <button
+                          className="btn-ghost"
+                          title="Reset icon and tint"
+                          aria-label={`Reset style for ${l.name}`}
+                          onClick={() => updateLink(l.id, { color: undefined, icon: undefined })}
+                        >
+                          ↺
+                        </button>
+                      )}
+
+                      {/* Nesting stays one level deep, so a folder is never
+                          offered as a home for another folder. */}
+                      {!l.folder && folders.length > 0 && (
+                        <select
+                          className="link-parent-select"
+                          value={l.parentId ?? ''}
+                          aria-label={`Folder for ${l.name}`}
+                          onChange={(e) => updateLink(l.id, { parentId: e.target.value || undefined })}
+                        >
+                          <option value="">Top level</option>
+                          {folders.map((f) => (
+                            <option key={f.id} value={f.id}>
+                              In {f.name}
+                            </option>
+                          ))}
+                        </select>
+                      )}
+
+                      {!l.folder && (
+                        <button
+                          className={`seg-btn small${l.search !== undefined ? ' on' : ''}`}
+                          title={
+                            l.search !== undefined
+                              ? 'Remove the search template'
+                              : 'Make this a search shortcut'
+                          }
+                          aria-pressed={l.search !== undefined}
+                          onClick={() =>
+                            updateLink(l.id, {
+                              // Seed the template from the link's own origin so
+                              // there is something sensible to edit rather than
+                              // an empty box.
+                              search: l.search !== undefined ? undefined : guessTemplate(l.url),
+                            })
+                          }
+                        >
+                          <SearchIcon size={13} />
+                          Search
+                        </button>
+                      )}
+
+                      <button
+                        className={`seg-btn small${l.hidden ? ' on' : ''}`}
+                        title={
+                          l.hidden
+                            ? 'Currently reachable by key and search only — click to show it on the page'
+                            : 'Hide the tile but keep the key working'
+                        }
+                        aria-pressed={!!l.hidden}
+                        onClick={() => updateLink(l.id, { hidden: l.hidden ? undefined : true })}
+                      >
+                        Keys only
+                      </button>
+                    </div>
+
+                    {l.search !== undefined && (
+                      <input
+                        className="link-search-input"
+                        placeholder="https://example.com/search?q=%s"
+                        value={l.search}
+                        aria-label={`Search URL for ${l.name}`}
+                        onChange={(e) => updateLink(l.id, { search: e.target.value })}
+                      />
+                    )}
+                  </div>
+                )
+              })}
+
+              <div className="row" style={{ marginTop: 8 }}>
+                <input
+                  placeholder="Name"
+                  value={linkName}
+                  onChange={(e) => setLinkName(e.target.value)}
+                  onKeyDown={(e) => e.key === 'Enter' && addLink()}
+                  style={{ flex: 1 }}
+                />
+                <input
+                  placeholder="URL"
+                  value={linkUrl}
+                  onChange={(e) => setLinkUrl(e.target.value)}
+                  onKeyDown={(e) => e.key === 'Enter' && addLink()}
+                  style={{ flex: 1.4 }}
+                />
+                {/* Wrapped, not passed directly: the click event would arrive
+                    as `hidden` and every new shortcut would be invisible. */}
+                <button className="btn-pill" onClick={() => addLink()} aria-label="Add shortcut">
+                  <PlusIcon />
                 </button>
               </div>
-            ))}
-            <div className="row" style={{ marginTop: 8 }}>
-              <input placeholder="Name" value={linkName} onChange={(e) => setLinkName(e.target.value)} style={{ flex: 1 }} />
-              <input placeholder="URL" value={linkUrl} onChange={(e) => setLinkUrl(e.target.value)} style={{ flex: 1.4 }} />
-              <button className="btn-pill" onClick={addLink} aria-label="Add link">
-                <PlusIcon />
-              </button>
+
+              <div className="row" style={{ marginTop: 6, gap: 8 }}>
+                <button className="btn-ghost" onClick={addFolder}>
+                  + Folder
+                </button>
+                {/* Same as adding a shortcut, but it goes straight to
+                    keyboard-only — the reason most people want one. */}
+                <button className="btn-ghost" onClick={() => addLink(true)}>
+                  + Keyboard-only site
+                </button>
+              </div>
+              <span className="muted">
+                A keyboard-only site answers to its key and shows up in search, but never takes a
+                tile on the page.
+              </span>
             </div>
-          </div>
+          </>
         )}
         {/* ================= MORE / ABOUT ================= */}
         {tab === 'about' && (
@@ -727,8 +1130,23 @@ export function SettingsPanel({ settings, setSettings, links, setLinks, wallpape
               <label>Shortcuts</label>
               <div className="about-row"><span>AI tools</span><span><kbd>Ctrl</kbd> + <kbd>K</kbd></span></div>
               <div className="about-row"><span>Settings</span><span><kbd>Ctrl</kbd> + <kbd>,</kbd></span></div>
-              <div className="about-row"><span>Focus timer</span><span><kbd>T</kbd></span></div>
-              <div className="about-row"><span>Close panel</span><span><kbd>Esc</kbd></span></div>
+              <div className="about-row"><span>Search your shortcuts</span><span><kbd>/</kbd></span></div>
+              <div className="about-row"><span>Jump to a shortcut</span><span>its <kbd>key</kbd></span></div>
+              <div className="about-row"><span>Open in a new tab</span><span><kbd>Alt</kbd> + <kbd>key</kbd></span></div>
+              <div className="about-row"><span>Step back out</span><span><kbd>Esc</kbd></span></div>
+              <div className="about-row">
+                <span>Focus timer</span>
+                <span>
+                  <kbd>T</kbd>
+                  {settings.keyNav && <span className="muted"> (off while keys are on)</span>}
+                </span>
+              </div>
+              <div className="about-row"><span>Launcher on any page</span><span><kbd>Alt</kbd> + <kbd>K</kbd></span></div>
+              <div className="about-row"><span>Save the current page</span><span><kbd>Alt</kbd> + <kbd>Shift</kbd> + <kbd>K</kbd></span></div>
+              <span className="muted">
+                Rebind the last two at <code>about:addons</code> → gear → Manage Extension Shortcuts
+                (Firefox &amp; Zen), or <code>chrome://extensions/shortcuts</code>.
+              </span>
             </div>
 
             <div className="field">
@@ -752,6 +1170,7 @@ export function SettingsPanel({ settings, setSettings, links, setLinks, wallpape
             </div>
           </>
         )}
+        </div>
       </aside>
     </>
   )

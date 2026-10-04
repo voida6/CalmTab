@@ -1,0 +1,11 @@
+{
+  "browser_specific_settings": {
+    "gecko": {
+      "id": "calmtab@voida6.github.io",
+      "strict_min_version": "140.0",
+      "_comment": "AMO requires an explicit data-collection declaration. CalmTab has no backend and uploads nothing, so 'none' is the accurate answer.",
+      "data_collection_permissions": { "required": ["none"] }
+    }
+  },
+  "background": { "scripts": ["background.js"] }
+}

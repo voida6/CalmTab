@@ -1,4 +1,4 @@
-import { useEffect, useState } from 'react'
+import { useNow } from '../hooks/useNow'
 
 const WORDS = ['twelve', 'one', 'two', 'three', 'four', 'five', 'six', 'seven', 'eight', 'nine', 'ten', 'eleven', 'twelve']
 
@@ -40,12 +40,9 @@ function phrase(d: Date): { lead: string; hour: string } {
 }
 
 export function WordClock() {
-  const [now, setNow] = useState(() => new Date())
-
-  useEffect(() => {
-    const id = setInterval(() => setNow(new Date()), 10_000)
-    return () => clearInterval(id)
-  }, [])
+  // The phrase changes on five-minute boundaries, so a coarse tick is plenty;
+  // 30s keeps it from lagging a boundary by more than half a tick.
+  const now = useNow(30_000)
 
   const { lead, hour } = phrase(now)
   return (

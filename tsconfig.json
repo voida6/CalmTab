@@ -18,5 +18,8 @@
     "noFallthroughCasesInSwitch": true,
     "types": ["chrome", "vite/client"]
   },
-  "include": ["src"]
+  "include": ["src"],
+  // Tests run through Node's type stripping (`npm test`) rather than the app
+  // build, and pull in node: builtins the app deliberately has no types for.
+  "exclude": ["src/**/*.test.ts"]
 }

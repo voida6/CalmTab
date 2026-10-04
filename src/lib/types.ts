@@ -3,7 +3,34 @@ export type { PaletteStyle }
 
 export type ThemeName = 'purple' | 'midnight' | 'teal' | 'peach' | 'mint' | 'lavender'
 export type Units = 'metric' | 'imperial'
-export type ClockStyle = 'digital' | 'minimal' | 'analog' | 'analogClassic' | 'word' | 'flip'
+export type ClockStyle =
+  | 'digital'
+  | 'minimal'
+  | 'analog'
+  | 'analogClassic'
+  | 'word'
+  | 'flip'
+  | 'terminal'
+  | 'binary'
+  | 'roman'
+  | 'progress'
+  | 'segment'
+  | 'dotmatrix'
+  | 'stack'
+
+/** Where the keyboard goes when a new tab opens.
+ *  - `browser`: leave the address bar focused, as a normal new tab does.
+ *    Press Esc to hand the keys to CalmTab.
+ *  - `page`: keys jump immediately; typing an unbound key starts a search.
+ *  - `search`: the search box is focused, so typing always searches. */
+export type LauncherFocus = 'browser' | 'page' | 'search'
+
+/** How much of the interface is drawn.
+ *  - `full`: everything you have switched on.
+ *  - `minimal`: the clock and the launcher, nothing else.
+ *  - `bare`: nothing at all. Typing or moving the mouse brings the launcher
+ *    back, and it fades away again when you stop. */
+export type ChromeLevel = 'full' | 'minimal' | 'bare'
 export type ColorScheme = 'dark' | 'light'
 export type IconStyle = 'themed' | 'favicon'
 export type CardShape = 'rounded' | 'squircle' | 'pill'
@@ -38,12 +65,25 @@ export const THEME_PAIR: Record<ThemeName, ThemeName> = {
   peach: 'midnight',
 }
 
+// A dock entry. Every field past `url` is optional, so shortcuts saved by
+// pre-0.6 versions stay valid as-is — an item with no `key` simply isn't
+// reachable from the keyboard, and one with no `parentId` sits at the root.
 export interface LinkItem {
   id: string
   name: string
-  url: string
+  url: string // '' for folders, which are containers rather than destinations
   color?: string // custom tint for the dock icon
   icon?: string // custom emoji/character overriding the brand glyph
+
+  // --- keyboard launcher (0.6+) ---
+  key?: string // single character that jumps here; CASE-SENSITIVE, so
+  // `m` and `M` are two different slots (62 per folder)
+  parentId?: string // id of the folder this lives in; absent = root level
+  folder?: boolean // true = a group of shortcuts rather than a destination
+  search?: string // URL template with a %s placeholder; makes this item a
+  // search shortcut that prompts for a term instead of opening
+  hidden?: boolean // reachable by its key and by search, but never drawn as a
+  // tile — for sites you want on a key without cluttering the page
 }
 
 export interface TodoItem {
@@ -61,9 +101,14 @@ export interface WidgetToggles {
   quickTimer: boolean // editable countdown timer
   habits: boolean
   ticker: boolean
+  /** @deprecated folded into the launcher bar in 0.6; kept so older stored
+   *  settings still parse. */
   search: boolean
   quote: boolean
   notes: boolean
+  calendar: boolean
+  world: boolean
+  converter: boolean
   dock: boolean
 }
 
@@ -110,8 +155,20 @@ export interface Settings {
   weatherSource: WeatherSource // city name lookup or browser geolocation
   tagline: string
   tickerSymbols: string[] // CoinGecko coin ids (e.g. bitcoin, ethereum)
+  worldZones: string[] // IANA time zone names for the world-clocks widget
   compactWidgets: boolean
   ambient: boolean // dim widgets into a screensaver after 1 min idle
+  keyNav: boolean // single-key jumping on the new tab
+  keyHints: boolean // draw the key badge on each shortcut tile
+  launcherFocus: LauncherFocus
+  chrome: ChromeLevel
+  // Turns off backdrop blur on the remaining large surfaces. Backdrop blur is
+  // the most expensive thing the page does; this is the escape hatch.
+  reduceEffects: boolean
+  // Percentages, applied as CSS variables. `uiScale` zooms the whole page;
+  // `clockScale` sizes the clock on top of that, so the two compose.
+  uiScale: number // 70-140
+  clockScale: number // 50-180
   show: WidgetToggles
   background: BackgroundSettings
 }
@@ -133,8 +190,18 @@ export const DEFAULT_SETTINGS: Settings = {
   weatherSource: 'city',
   tagline: 'LOCK IN',
   tickerSymbols: ['bitcoin', 'ethereum'],
+  worldZones: ['Europe/London', 'America/New_York', 'Asia/Tokyo'],
   compactWidgets: false,
   ambient: true,
+  keyNav: true,
+  keyHints: true,
+  // Typing should land in CalmTab's own search box, not the address bar. A
+  // bound key still jumps while that box is empty.
+  launcherFocus: 'search',
+  uiScale: 100,
+  clockScale: 100,
+  chrome: 'full',
+  reduceEffects: false,
   show: {
     weather: true,
     forecast: false,
@@ -147,6 +214,9 @@ export const DEFAULT_SETTINGS: Settings = {
     search: false,
     quote: false,
     notes: false,
+    calendar: false,
+    world: false,
+    converter: false,
     dock: true,
   },
   background: { blur: 3, dim: 35, glass: true, cardOpacity: 70, fade: 300 },
@@ -189,15 +259,19 @@ export const DEFAULT_WALLPAPER: WallpaperState = {
 }
 
 export const DEFAULT_WIDGET_ORDER = [
-  'weather', 'focus', 'timer', 'habits', 'quickTimer', 'ticker', 'search', 'quote', 'notes',
+  // `search` is deliberately absent: the standalone search widget was folded
+  // into the launcher bar in 0.6. The toggle survives in WidgetToggles so
+  // stored settings from older versions still parse.
+  'weather', 'focus', 'timer', 'habits', 'quickTimer', 'ticker', 'quote', 'notes',
+  'calendar', 'world', 'converter',
 ]
 
 export const DEFAULT_LINKS: LinkItem[] = [
-  { id: 'yt', name: 'YouTube', url: 'https://youtube.com' },
-  { id: 'li', name: 'LinkedIn', url: 'https://linkedin.com' },
-  { id: 'fb', name: 'Facebook', url: 'https://facebook.com' },
-  { id: 'rd', name: 'Reddit', url: 'https://reddit.com' },
-  { id: 'az', name: 'Amazon', url: 'https://amazon.com' },
+  { id: 'yt', name: 'YouTube', url: 'https://youtube.com', key: 'y' },
+  { id: 'li', name: 'LinkedIn', url: 'https://linkedin.com', key: 'l' },
+  { id: 'fb', name: 'Facebook', url: 'https://facebook.com', key: 'f' },
+  { id: 'rd', name: 'Reddit', url: 'https://reddit.com', key: 'r' },
+  { id: 'az', name: 'Amazon', url: 'https://amazon.com', key: 'a' },
 ]
 
 export function uid(): string {

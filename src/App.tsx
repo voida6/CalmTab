@@ -1,9 +1,16 @@
-import { useEffect, useMemo, useRef, useState } from 'react'
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import { createPortal } from 'react-dom'
 import { Clock } from './components/Clock'
 import { AnalogClock } from './components/AnalogClock'
 import { WordClock } from './components/WordClock'
 import { FlipClock } from './components/FlipClock'
+import { TerminalClock } from './components/TerminalClock'
+import { BinaryClock } from './components/BinaryClock'
+import { RomanClock } from './components/RomanClock'
+import { ProgressClock } from './components/ProgressClock'
+import { SegmentClock } from './components/SegmentClock'
+import { DotMatrixClock } from './components/DotMatrixClock'
+import { StackClock } from './components/StackClock'
 import { Greeting } from './components/Greeting'
 import { PinnedTasks } from './components/PinnedTasks'
 import { WeatherCard } from './components/WeatherCard'
@@ -12,9 +19,10 @@ import { TimerWidget } from './components/TimerWidget'
 import { HabitsWidget } from './components/HabitsWidget'
 import { QuickTimerWidget } from './components/QuickTimerWidget'
 import { TickerWidget } from './components/TickerWidget'
-import { SearchBar } from './components/SearchBar'
 import { QuoteCard } from './components/QuoteCard'
 import { LinksDock } from './components/LinksDock'
+import { CommandBar } from './components/CommandBar'
+import { useKeyNav } from './hooks/useKeyNav'
 import { TodoPanel } from './components/TodoPanel'
 import { SettingsPanel } from './components/SettingsPanel'
 import { AiToolsMenu } from './components/AiToolsMenu'
@@ -30,44 +38,137 @@ import {
   DEFAULT_WIDGET_ORDER,
   LIGHT_THEMES,
   THEME_PAIR,
+  type LauncherFocus,
   type LinkItem,
   type Settings,
   type TodoItem,
   type WallpaperState,
 } from './lib/types'
 import { analyzeImage, paletteFromHex, PALETTE_TOKENS } from './lib/dynamicColor'
-import { thumbFromDataUrl } from './lib/image'
+import { thumbFromDataUrl, wallpaperTint } from './lib/image'
 import { getItem } from './lib/storage'
 import { NotesWidget } from './components/NotesWidget'
+import { CalendarWidget } from './components/CalendarWidget'
+import { WorldClocksWidget } from './components/WorldClocksWidget'
+import { ConverterWidget } from './components/ConverterWidget'
 
 type Panel = 'none' | 'todo' | 'settings' | 'apps' | 'ai'
 
 export default function App() {
-  const [storedSettings, setSettings] = useStoredState<Settings>('settings', DEFAULT_SETTINGS)
+  const [storedSettings, setSettings, settingsHydrated] = useStoredState<Settings>('settings', DEFAULT_SETTINGS)
   const [todos, setTodos] = useStoredState<TodoItem[]>('todos', [])
   const [links, setLinks] = useStoredState<LinkItem[]>('links', DEFAULT_LINKS)
-  const [wallpaper, setWallpaper] = useStoredState<WallpaperState>('wallpaper', DEFAULT_WALLPAPER)
+  const [wallpaper, setWallpaper, wallpaperHydrated] = useStoredState<WallpaperState>('wallpaper', DEFAULT_WALLPAPER)
   const [widgetOrder, setWidgetOrder] = useStoredState<string[]>('widgetOrder', DEFAULT_WIDGET_ORDER)
   const [panel, setPanel] = useState<Panel>('none')
   const [ready, setReady] = useState(false)
   const [idle, setIdle] = useState(false)
   const [dragOver, setDragOver] = useState(-1)
+  // One box, two jobs: a query to search with, or the term for a locked-in
+  // search shortcut. They never apply at the same time, so one state serves.
+  const [query, setQuery] = useState('')
+  const [engineId, setEngineId] = useStoredState<string>('searchEngine', 'google')
   const dragSrc = useRef(-1)
+  const commandInput = useRef<HTMLInputElement>(null)
+  const appRef = useRef<HTMLDivElement>(null)
 
+  // Focus has to be decided on the very first render — by the time
+  // chrome.storage resolves, the caret has already gone somewhere. The boot
+  // cache is synchronous, so it answers in time; a first-ever run falls back
+  // to the default.
+  const [initialFocus] = useState<LauncherFocus>(() => {
+    try {
+      const cached = JSON.parse(localStorage.getItem('calmtab-boot') || 'null')
+      return cached?.launcherFocus ?? DEFAULT_SETTINGS.launcherFocus
+    } catch {
+      return DEFAULT_SETTINGS.launcherFocus
+    }
+  })
+
+  // Storage is async, so the first renders hold DEFAULT_SETTINGS /
+  // DEFAULT_WALLPAPER — i.e. the purple theme and no wallpaper. Anything that
+  // writes CSS variables must wait for the real values, otherwise it undoes
+  // what boot.js painted and the page flashes the defaults until storage
+  // answers (very visible when the machine is throttled).
+  const hydrated = settingsHydrated && wallpaperHydrated
+
+  // Hold the fade-in until the real settings are in: the wallpaper boot.js
+  // painted is already on screen, so waiting shows a finished page instead of
+  // one that restyles itself (glass vs plain, scale, theme) mid-fade.
   useEffect(() => {
+    if (!hydrated) return
     const id = requestAnimationFrame(() => requestAnimationFrame(() => setReady(true)))
     return () => cancelAnimationFrame(id)
+  }, [hydrated])
+
+  // Safety net: storage can fail outright (IndexedDB is unavailable in some
+  // profiles), and an invisible page is a worse failure than a restyle.
+  useEffect(() => {
+    const t = window.setTimeout(() => setReady(true), 800)
+    return () => window.clearTimeout(t)
   }, [])
 
-  const settings = useMemo<Settings>(
-    () => ({
+  // `browser` leaves the address bar alone on purpose. `page` tries to claim
+  // the keyboard so a single key jumps straight away.
+  useEffect(() => {
+    if (initialFocus === 'page') appRef.current?.focus({ preventScroll: true })
+  }, [initialFocus])
+
+  // `search` starts with the input's own autoFocus, but on a new tab the
+  // browser parks the caret in the address bar and does so *after* the page's
+  // first render on a slow (power-saving) machine, so autoFocus alone loses the
+  // race. Keep asking for the caret for a short while, and stop the moment
+  // anything else on the page has it — the user clicking elsewhere wins.
+  useEffect(() => {
+    if (initialFocus !== 'search') return
+    let tries = 0
+    const id = setInterval(() => {
+      const el = commandInput.current
+      const active = document.activeElement
+      const idle = !active || active === document.body || active === document.documentElement
+      if (!el || active === el || !idle || ++tries > 20) {
+        clearInterval(id)
+        return
+      }
+      el.focus({ preventScroll: true })
+    }, 50)
+    return () => clearInterval(id)
+  }, [initialFocus])
+
+  const settings = useMemo<Settings>(() => {
+    const merged: Settings = {
       ...DEFAULT_SETTINGS,
       ...storedSettings,
       show: { ...DEFAULT_SETTINGS.show, ...storedSettings.show },
       background: { ...DEFAULT_SETTINGS.background, ...storedSettings.background },
-    }),
-    [storedSettings],
-  )
+    }
+    // `minimal: boolean` became `chrome: 'full' | 'minimal' | 'bare'`. Anyone
+    // who had it switched on keeps the mode they chose.
+    const legacyMinimal = (storedSettings as { minimal?: boolean }).minimal
+    if (legacyMinimal && storedSettings.chrome === undefined) merged.chrome = 'minimal'
+    return merged
+  }, [storedSettings])
+
+  // The keyboard launcher. Declared early so its key listener is registered
+  // before the app's own single-letter shortcuts below, letting a bound key
+  // win over them (they check `defaultPrevented`).
+  const keynav = useKeyNav({
+    items: links,
+    // An open panel owns the keyboard; jumping out from under a settings
+    // field the user is filling in would be hostile.
+    enabled: settings.keyNav && panel === 'none',
+    term: query,
+    setTerm: setQuery,
+    onFallthrough: useCallback(
+      (key: string) => {
+        // An unbound key isn't nothing — it's the start of a search. `/` just
+        // opens the box; anything else seeds it with what was typed.
+        commandInput.current?.focus()
+        if (key !== '/') setQuery((q) => q + key)
+      },
+      [setQuery],
+    ),
+  })
 
   const hasWallpaper = !!wallpaper.dataUrl
 
@@ -138,6 +239,33 @@ export default function App() {
     }
   }, [hasWallpaper, wallpaper.dataUrl, wallpaper.thumb])
 
+  // 1c) The wallpaper boiled down to a colour and a gradient, for the *next*
+  // load's boot snapshot — cheap enough to redo each time rather than store.
+  // Seeded from the current snapshot so it is known on the first render, not
+  // one async hop later; the theme background must never get a turn.
+  const [tint, setTint] = useState<{ bg: string; grad: string }>(() => {
+    try {
+      const b = JSON.parse(localStorage.getItem('calmtab-boot') || 'null')
+      return { bg: b?.bg || '', grad: b?.bgGrad || '' }
+    } catch {
+      return { bg: '', grad: '' }
+    }
+  })
+  useEffect(() => {
+    if (!hydrated) return // the default wallpaper is empty; don't drop the seed
+    if (!wallpaper.thumb) {
+      setTint({ bg: '', grad: '' })
+      return
+    }
+    let active = true
+    wallpaperTint(wallpaper.thumb)
+      .then((t) => active && setTint(t))
+      .catch(() => undefined)
+    return () => {
+      active = false
+    }
+  }, [hydrated, wallpaper.thumb])
+
   // 2) Build the palette from the chosen seed (image's or a custom color) for the
   // current light/dark scheme. Cached via a signature of those inputs.
   useEffect(() => {
@@ -160,6 +288,7 @@ export default function App() {
   // Hero text contrast: pick light/dark text for clock/greeting based on how
   // bright the wallpaper is behind them (accounting for the dim overlay).
   useEffect(() => {
+    if (!hydrated) return
     const s = document.documentElement.style
     if (hasWallpaper) {
       const effLum = (wallpaper.luminance ?? 128) * (1 - (settings.background.dim / 100) * 0.9)
@@ -170,7 +299,16 @@ export default function App() {
       s.removeProperty('--on-bg')
       s.removeProperty('--on-bg-shadow')
     }
-  }, [hasWallpaper, wallpaper.luminance, settings.background.dim])
+  }, [hydrated, hasWallpaper, wallpaper.luminance, settings.background.dim])
+
+  // Size controls, as plain multipliers. `--ui-scale` drives a `zoom` on the
+  // app shell; `--clock-scale` multiplies the clock's own font size on top.
+  useEffect(() => {
+    if (!hydrated) return
+    const s = document.documentElement.style
+    s.setProperty('--ui-scale', String(settings.uiScale / 100))
+    s.setProperty('--clock-scale', String(settings.clockScale / 100))
+  }, [hydrated, settings.uiScale, settings.clockScale])
 
   // Card corner shape -> --radius-card (cards) and --radius-btn (buttons/tiles).
   useEffect(() => {
@@ -181,6 +319,7 @@ export default function App() {
 
   // Apply colors: inline CSS-var overrides for auto mode, else named theme.
   useEffect(() => {
+    if (!hydrated) return
     const root = document.documentElement
     if (useAuto && wallpaper.palette) {
       for (const token of PALETTE_TOKENS) root.style.setProperty(token, wallpaper.palette[token])
@@ -188,30 +327,72 @@ export default function App() {
       for (const token of PALETTE_TOKENS) root.style.removeProperty(token)
       root.dataset.theme = settings.theme
     }
-  }, [useAuto, wallpaper.palette, settings.theme])
+    // Whatever the theme says, the page background behind a wallpaper should be
+    // the wallpaper's own colour: it is what shows through in the moments the
+    // image layer has nothing to paint (a swap, a decode), and the theme colour
+    // showing there is the flash.
+    if (hasWallpaper && tint.bg) {
+      root.style.setProperty('--bg', tint.bg)
+      root.style.setProperty('--bg-grad', tint.grad || 'none')
+    } else {
+      root.style.removeProperty('--bg-grad')
+    }
+  }, [hydrated, useAuto, wallpaper.palette, settings.theme, hasWallpaper, tint])
+
+  // GIFs animate straight from CSS background-image; videos keep the still
+  // frame here as a backdrop while the <video> element loads on top.
+  const bgSrc = hasWallpaper ? (wallpaper.kind === 'gif' && mediaUrl ? mediaUrl : wallpaper.dataUrl) : ''
+
+  // Don't hand the full wallpaper to CSS until it has decoded. Assigning an
+  // undecoded background-image leaves that layer with nothing to paint for as
+  // long as the decode takes — a full-size photo is tens of milliseconds at
+  // best — and what shows through the hole is the page background. That gap,
+  // between boot.js's thumbnail and the real image, is the flash. Until it is
+  // ready the thumbnail boot.js painted stays up, blur and all.
+  const [decodedSrc, setDecodedSrc] = useState('')
+  useEffect(() => {
+    if (!hydrated || !bgSrc) return
+    let active = true
+    const done = () => {
+      if (active) setDecodedSrc(bgSrc)
+    }
+    const img = new Image()
+    img.src = bgSrc
+    if (img.decode) img.decode().then(done, done)
+    else if (img.complete) done()
+    else img.onload = img.onerror = done
+    return () => {
+      active = false
+    }
+  }, [hydrated, bgSrc])
 
   // Keep the background CSS variables in sync (boot.js set them for first paint).
   useEffect(() => {
+    if (!hydrated) return
     const s = document.documentElement.style
     s.setProperty('--fade', `${settings.background.fade}ms`)
     s.setProperty('--card-opacity', `${settings.background.cardOpacity}%`)
-    if (hasWallpaper) {
-      // GIFs animate straight from CSS background-image; videos keep the still
-      // frame here as a backdrop while the <video> element loads on top.
-      const bgSrc = wallpaper.kind === 'gif' && mediaUrl ? mediaUrl : wallpaper.dataUrl
-      s.setProperty('--wp-image', `url(${bgSrc})`)
-      s.setProperty('--wp-blur', `${settings.background.blur}px`)
-      s.setProperty('--wp-dim', String(settings.background.dim / 100))
-      s.setProperty('--wp-on', '1')
-    } else {
+    if (!hasWallpaper) {
       s.setProperty('--wp-on', '0')
       s.removeProperty('--wp-image')
+      return
     }
+    s.setProperty('--wp-dim', String(settings.background.dim / 100))
+    s.setProperty('--wp-on', '1')
+    // Still on boot.js's thumbnail: leave its (deliberately heavier) blur alone,
+    // or the upscaling it hides becomes visible.
+    if (decodedSrc !== bgSrc) return
+    s.setProperty('--wp-image', `url(${bgSrc})`)
+    s.setProperty('--wp-blur', `${settings.background.blur}px`)
+    // With no blur the layer must be full size or it would visibly pixelate.
+    // With any blur, quarter size costs a sixteenth of the pixels and looks
+    // the same, because the output is blurred either way.
+    s.setProperty('--wp-shrink', settings.background.blur > 0 ? '4' : '1')
   }, [
+    hydrated,
     hasWallpaper,
-    wallpaper.dataUrl,
-    wallpaper.kind,
-    mediaUrl,
+    bgSrc,
+    decodedSrc,
     settings.background.blur,
     settings.background.dim,
     settings.background.fade,
@@ -220,6 +401,9 @@ export default function App() {
 
   // Cache a synchronous snapshot for the boot script to apply on the next load.
   useEffect(() => {
+    // Never cache the defaults: that would hand the next load the very flash
+    // this snapshot exists to prevent.
+    if (!hydrated) return
     const effLum = (wallpaper.luminance ?? 128) * (1 - (settings.background.dim / 100) * 0.9)
     const lightText = effLum < 140
     const boot = {
@@ -230,10 +414,22 @@ export default function App() {
       // the localStorage quota no matter the wallpaper size.
       dataUrl: wallpaper.thumb,
       isThumb: true,
+      // Painted as the page background before anything decodes, so the first
+      // frame is the wallpaper's own colour rather than the theme's (which is
+      // what produced the purple flash on a slow first paint).
+      bg: hasWallpaper ? tint.bg : null,
+      bgGrad: hasWallpaper ? tint.grad : null,
       blur: settings.background.blur,
       dim: settings.background.dim,
       fade: settings.background.fade,
       cardOpacity: settings.background.cardOpacity,
+      // Cached so the first painted frame is already at the chosen size,
+      // rather than snapping once React mounts.
+      uiScale: settings.uiScale,
+      clockScale: settings.clockScale,
+      // Not used by boot.js — read by App on the next load to decide where
+      // the caret goes before storage has resolved.
+      launcherFocus: settings.launcherFocus,
       onBg: hasWallpaper ? (lightText ? '#f3f3f6' : '#17181c') : null,
       onBgShadow: hasWallpaper
         ? lightText
@@ -247,6 +443,7 @@ export default function App() {
       /* localStorage may be full with a large wallpaper; non-fatal */
     }
   }, [
+    hydrated,
     useAuto,
     hasWallpaper,
     settings.theme,
@@ -257,6 +454,10 @@ export default function App() {
     settings.background.dim,
     settings.background.fade,
     settings.background.cardOpacity,
+    settings.uiScale,
+    settings.clockScale,
+    settings.launcherFocus,
+    tint,
   ])
 
   // Widgets added in newer versions won't be in a stored order — append them.
@@ -264,6 +465,34 @@ export default function App() {
     () => [...widgetOrder, ...DEFAULT_WIDGET_ORDER.filter((k) => !widgetOrder.includes(k))],
     [widgetOrder],
   )
+
+  // Bare mode shows nothing until you ask for it. Moving the mouse or touching
+  // the keyboard reveals the launcher; it fades out again a few seconds later.
+  // Typing is excluded from the timeout — a query on screen keeps it up.
+  const [revealed, setRevealed] = useState(false)
+  useEffect(() => {
+    if (settings.chrome !== 'bare') {
+      setRevealed(false)
+      return
+    }
+    let hide = 0
+    const wake = () => {
+      setRevealed(true)
+      window.clearTimeout(hide)
+      hide = window.setTimeout(() => setRevealed(false), 2600)
+    }
+    const events = ['mousemove', 'mousedown', 'keydown', 'wheel', 'touchstart'] as const
+    for (const e of events) window.addEventListener(e, wake, { passive: true })
+    return () => {
+      window.clearTimeout(hide)
+      for (const e of events) window.removeEventListener(e, wake)
+    }
+  }, [settings.chrome])
+
+  // Anything typed keeps the page up regardless of the timer above.
+  useEffect(() => {
+    if (query) setRevealed(true)
+  }, [query])
 
   // Ambient screensaver: after 1 min without input, dim everything but the
   // hero (clock + greeting), which drifts slowly. Any input wakes it.
@@ -290,6 +519,17 @@ export default function App() {
   const openTodos = todos.filter((t) => !t.done).length
   const glass = settings.background.glass && hasWallpaper
   const close = () => setPanel('none')
+
+  const minimal = settings.chrome !== 'full'
+  const bare = settings.chrome === 'bare'
+  // Checked against the toggles rather than by rendering, so the rail can be
+  // left out of the DOM entirely and the main column centres on the page.
+  const hasWidgets =
+    !minimal &&
+    fullWidgetOrder.some((key) => !!settings.show[key as keyof typeof settings.show])
+  // The shortcut grid steps aside while results are on screen, so the two
+  // never compete for the same patch of the page.
+  const showGrid = !minimal && settings.show.dock && !query.trim()
 
   useEffect(() => {
     const apply = () => {
@@ -321,7 +561,9 @@ export default function App() {
       if (e.key === 'Escape') { setPanel('none'); return }
       if (meta && e.key === 'k') { e.preventDefault(); setPanel((p) => (p === 'ai' ? 'none' : 'ai')); return }
       if (meta && e.key === ',') { e.preventDefault(); setPanel((p) => (p === 'settings' ? 'none' : 'settings')); return }
-      if (e.key === 't' && !meta && !e.altKey && !typing) {
+      // `t` focuses the timer — but only if the launcher hasn't already
+      // claimed the keystroke for a shortcut bound to `t`.
+      if (e.key === 't' && !meta && !e.altKey && !typing && !e.defaultPrevented) {
         window.dispatchEvent(new Event('calmtab:focus-timer'))
       }
     }
@@ -339,6 +581,20 @@ export default function App() {
         return <WordClock />
       case 'flip':
         return <FlipClock hour12={settings.hour12} />
+      case 'terminal':
+        return <TerminalClock hour12={settings.hour12} />
+      case 'binary':
+        return <BinaryClock hour12={settings.hour12} />
+      case 'roman':
+        return <RomanClock hour12={settings.hour12} />
+      case 'progress':
+        return <ProgressClock hour12={settings.hour12} />
+      case 'segment':
+        return <SegmentClock hour12={settings.hour12} showSeconds />
+      case 'dotmatrix':
+        return <DotMatrixClock hour12={settings.hour12} />
+      case 'stack':
+        return <StackClock hour12={settings.hour12} />
       case 'minimal':
         return <Clock hour12={settings.hour12} showSeconds={false} />
       default:
@@ -354,9 +610,11 @@ export default function App() {
       case 'habits':  return settings.show.habits  ? <HabitsWidget /> : null
       case 'quickTimer': return settings.show.quickTimer ? <QuickTimerWidget /> : null
       case 'ticker':  return settings.show.ticker  ? <TickerWidget symbols={settings.tickerSymbols} /> : null
-      case 'search':  return settings.show.search  ? <SearchBar /> : null
       case 'quote':   return settings.show.quote   ? <QuoteCard /> : null
       case 'notes':   return settings.show.notes   ? <NotesWidget /> : null
+      case 'calendar': return settings.show.calendar ? <CalendarWidget /> : null
+      case 'world':   return settings.show.world   ? <WorldClocksWidget zones={settings.worldZones} hour12={settings.hour12} /> : null
+      case 'converter': return settings.show.converter ? <ConverterWidget /> : null
       default: return null
     }
   }
@@ -374,13 +632,67 @@ export default function App() {
   }
 
   return (
-    <div className={`app ${glass ? 'glass' : ''} ${ready ? 'ready' : ''} ${isLight ? 'light' : ''} ${settings.compactWidgets ? 'compact' : ''} ${idle && panel === 'none' ? 'ambient' : ''}`}>
-      <div className="hero">
-        {renderClock()}
-        <Greeting name={settings.name} tagline={settings.tagline} />
-        {settings.show.pinnedTasks && <PinnedTasks todos={todos} setTodos={setTodos} />}
+    <div
+      ref={appRef}
+      className={`app ${glass ? 'glass' : ''} ${ready ? 'ready' : ''} ${isLight ? 'light' : ''} ${settings.compactWidgets ? 'compact' : ''} ${minimal ? 'minimal' : ''} ${bare ? 'bare' : ''} ${revealed ? 'revealed' : ''} ${settings.reduceEffects ? 'plain' : ''} ${idle && panel === 'none' ? 'ambient' : ''}`}
+      // Focus target for `page` mode, so keys reach the launcher rather than
+      // the address bar. Whether the browser allows this on a new tab is up to
+      // the browser — Firefox and Zen usually keep the address bar.
+      tabIndex={-1}
+    >
+      {/* The launcher is the point of the page now, so it sits in the middle
+          column with the clock above it and the shortcuts below. Widgets moved
+          to their own rail on the right. */}
+      <div className="main-col">
+        {/* Bare mode shows nothing at all — not even the clock — until you
+            move the mouse or start typing. */}
+        {!bare && (
+          <div className="hero">
+            {renderClock()}
+            <Greeting name={settings.name} tagline={settings.tagline} />
+            {!minimal && settings.show.pinnedTasks && (
+              <PinnedTasks todos={todos} setTodos={setTodos} />
+            )}
+          </div>
+        )}
+
+        <CommandBar
+          ref={commandInput}
+          items={links}
+          iconStyle={settings.iconStyle}
+          engineId={engineId}
+          setEngineId={setEngineId}
+          query={query}
+          setQuery={setQuery}
+          crumbs={keynav.crumbs}
+          locked={keynav.locked}
+          onSubmitLocked={(newTab) => keynav.submit(newTab)}
+          onActivate={keynav.activate}
+          onNavigate={(url, newTab) => {
+            if (newTab) window.open(url, '_blank', 'noopener')
+            else window.location.href = url
+          }}
+          onReset={() => {
+            keynav.reset()
+            setQuery('')
+          }}
+          autoFocus={initialFocus === 'search'}
+        />
+
+        {/* Typing replaces the grid with results, so the two never compete
+            for the same patch of screen. */}
+        {showGrid && (
+          <LinksDock
+            links={keynav.visible}
+            iconStyle={settings.iconStyle}
+            showKeys={settings.keyNav && settings.keyHints}
+            onActivate={keynav.activate}
+            layout="grid"
+          />
+        )}
       </div>
 
+      {hasWidgets && (
       <div className="right-col">
         {fullWidgetOrder.map((key, i) => {
           const content = renderWidget(key)
@@ -410,55 +722,61 @@ export default function App() {
           )
         })}
       </div>
+      )}
 
-      {settings.show.dock && <LinksDock links={links} iconStyle={settings.iconStyle} />}
+      {!minimal && (
+        <>
+          <button
+            className="corner-btn top-left"
+            onClick={() => setPanel('todo')}
+            data-label={openTodos ? `${openTodos} open task${openTodos > 1 ? 's' : ''}` : 'Tasks'}
+            aria-label="Tasks"
+          >
+            <ListIcon />
+          </button>
 
+          <button
+            className={`appearance-switch ${isLight ? 'is-light' : 'is-dark'}`}
+            onClick={toggleAppearance}
+            data-label={isLight ? 'Switch to dark' : 'Switch to light'}
+            aria-label="Toggle light or dark mode"
+            role="switch"
+            aria-checked={isLight}
+          >
+            <span className="end-icon left">
+              <SunIcon size={13} />
+            </span>
+            <span className="end-icon right">
+              <MoonIcon size={13} />
+            </span>
+            <span className="appearance-knob">{isLight ? <SunIcon size={14} /> : <MoonIcon size={14} />}</span>
+          </button>
+
+          <button
+            className="corner-btn top-right"
+            onClick={() => setPanel('apps')}
+            data-label="Apps"
+            aria-label="Apps"
+          >
+            <GridIcon />
+          </button>
+
+          <button
+            className="corner-btn bottom-left"
+            data-label="AI Tools"
+            aria-label="AI Tools"
+            onClick={() => setPanel(panel === 'ai' ? 'none' : 'ai')}
+          >
+            <SparkleIcon />
+          </button>
+        </>
+      )}
+
+      {/* Settings survives minimal mode, but fades out until the mouse moves —
+          otherwise the only way back would be a keyboard shortcut nobody
+          remembers, and the mode would be a trap. */}
       <button
-        className="corner-btn top-left"
-        onClick={() => setPanel('todo')}
-        data-label={openTodos ? `${openTodos} open task${openTodos > 1 ? 's' : ''}` : 'Tasks'}
-        aria-label="Tasks"
-      >
-        <ListIcon />
-      </button>
-
-      <button
-        className={`appearance-switch ${isLight ? 'is-light' : 'is-dark'}`}
-        onClick={toggleAppearance}
-        data-label={isLight ? 'Switch to dark' : 'Switch to light'}
-        aria-label="Toggle light or dark mode"
-        role="switch"
-        aria-checked={isLight}
-      >
-        <span className="end-icon left">
-          <SunIcon size={13} />
-        </span>
-        <span className="end-icon right">
-          <MoonIcon size={13} />
-        </span>
-        <span className="appearance-knob">{isLight ? <SunIcon size={14} /> : <MoonIcon size={14} />}</span>
-      </button>
-
-      <button
-        className="corner-btn top-right"
-        onClick={() => setPanel('apps')}
-        data-label="Apps"
-        aria-label="Apps"
-      >
-        <GridIcon />
-      </button>
-
-      <button
-        className="corner-btn bottom-left"
-        data-label="AI Tools"
-        aria-label="AI Tools"
-        onClick={() => setPanel(panel === 'ai' ? 'none' : 'ai')}
-      >
-        <SparkleIcon />
-      </button>
-
-      <button
-        className="corner-btn bottom-right"
+        className={`corner-btn bottom-right${minimal ? ' peek' : ''}`}
         onClick={() => setPanel('settings')}
         data-label="Settings"
         aria-label="Settings"

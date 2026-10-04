@@ -1,4 +1,4 @@
-import { useEffect, useState } from 'react'
+import { useNow, MINUTE } from '../hooks/useNow'
 
 // A flip-card digit. Re-keying the inner span on value change replays the
 // CSS flip-in animation, giving the split-flap feel without heavy 3D logic.
@@ -14,12 +14,8 @@ function Digit({ value }: { value: string }) {
 }
 
 export function FlipClock({ hour12 }: { hour12: boolean }) {
-  const [now, setNow] = useState(() => new Date())
-
-  useEffect(() => {
-    const id = setInterval(() => setNow(new Date()), 1000)
-    return () => clearInterval(id)
-  }, [])
+  // MINUTE because only hours and minutes are shown.
+  const now = useNow(MINUTE)
 
   const p = (n: number) => String(n).padStart(2, '0')
   const h = hour12 ? now.getHours() % 12 || 12 : now.getHours()

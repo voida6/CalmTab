@@ -41,6 +41,49 @@ export async function thumbFromDataUrl(dataUrl: string, maxEdge = 96, quality = 
   return scaleImage(img, maxEdge, quality)
 }
 
+// A wallpaper reduced to its average colour plus a CSS gradient that stands in
+// for it. Cached in the boot snapshot: gradients paint immediately, so the first
+// frame is already a rough blurred wallpaper rather than a flat colour waiting
+// for the thumbnail to decode — a flat colour is exactly what reads as a flash.
+export async function wallpaperTint(dataUrl: string): Promise<{ bg: string; grad: string }> {
+  const img = await loadImage(dataUrl)
+  const canvas = document.createElement('canvas')
+  // 3x3: enough to place light and dark regions roughly where they belong,
+  // small enough that the browser does the averaging for us.
+  canvas.width = 3
+  canvas.height = 3
+  const ctx = canvas.getContext('2d')
+  if (!ctx) throw new Error('Canvas not supported')
+  ctx.drawImage(img, 0, 0, 3, 3)
+  const d = ctx.getImageData(0, 0, 3, 3).data
+  const hex = (i: number) =>
+    '#' + [d[i], d[i + 1], d[i + 2]].map((v) => v.toString(16).padStart(2, '0')).join('')
+
+  let r = 0
+  let g = 0
+  let b = 0
+  const cells: string[] = []
+  for (let i = 0; i < 9; i++) {
+    cells.push(hex(i * 4))
+    r += d[i * 4]
+    g += d[i * 4 + 1]
+    b += d[i * 4 + 2]
+  }
+  const avg = '#' + [r / 9, g / 9, b / 9].map((v) => Math.round(v).toString(16).padStart(2, '0')).join('')
+
+  // One soft radial per cell, centred on the region it was sampled from. They
+  // overlap into something close to a heavily blurred version of the image.
+  const grad = cells
+    .map((c, i) => {
+      const x = (i % 3) * 50
+      const y = Math.floor(i / 3) * 50
+      return `radial-gradient(60% 60% at ${x}% ${y}%, ${c} 0%, transparent 100%)`
+    })
+    .join(', ')
+
+  return { bg: avg, grad }
+}
+
 // First frame of a GIF (or any image file) as a scaled JPEG data URL.
 export async function fileFrameDataUrl(file: Blob, maxEdge = 2560, quality = 0.85): Promise<string> {
   const url = URL.createObjectURL(file)

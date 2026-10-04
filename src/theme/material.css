@@ -20,6 +20,13 @@
   --track: #4a4259;
 }
 
+/* Before boot.js or React has set a theme (first-ever run, or a cleared boot
+   cache) there is no data-theme attribute, and the purple defaults above would
+   paint. A neutral base means that frame is never a wrong-coloured flash. */
+:root:not([data-theme]) {
+  --bg: #14151a;
+}
+
 :root[data-theme='midnight'] {
   --bg: #1e2433;
   --surface: #262d3f;

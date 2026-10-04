@@ -1,4 +1,4 @@
-import { useEffect, useState } from 'react'
+import { MINUTE, SECOND, useNow } from '../hooks/useNow'
 
 function format(d: Date, hour12: boolean, showSeconds: boolean): { time: string; suffix: string } {
   const p = (n: number) => String(n).padStart(2, '0')
@@ -13,12 +13,10 @@ function format(d: Date, hour12: boolean, showSeconds: boolean): { time: string;
 }
 
 export function Clock({ hour12, showSeconds = true }: { hour12: boolean; showSeconds?: boolean }) {
-  const [now, setNow] = useState(() => new Date())
-
-  useEffect(() => {
-    const id = setInterval(() => setNow(new Date()), 1000)
-    return () => clearInterval(id)
-  }, [])
+  // Without seconds on screen there is nothing to update 59 times a minute,
+  // and this face carries an expensive glow — so only tick as often as the
+  // digits actually change.
+  const now = useNow(showSeconds ? SECOND : MINUTE)
 
   const { time, suffix } = format(now, hour12, showSeconds)
   return (

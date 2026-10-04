@@ -1,4 +1,4 @@
-import { useEffect, useState } from 'react'
+import { useNow, SECOND } from '../hooks/useNow'
 
 // Material You "flower" / scalloped-circle path.
 function scallopPath(radius: number, lobes: number, cx = 100, cy = 100): string {
@@ -23,12 +23,8 @@ interface Props {
 }
 
 export function AnalogClock({ face = 'flower' }: Props) {
-  const [now, setNow] = useState(() => new Date())
-
-  useEffect(() => {
-    const id = setInterval(() => setNow(new Date()), 1000)
-    return () => clearInterval(id)
-  }, [])
+  // SECOND because the second hand sweeps.
+  const now = useNow(SECOND)
 
   const s = now.getSeconds()
   const m = now.getMinutes()
